@@ -40,14 +40,13 @@ build() {
 	done
 	[ -z "$parent_ref" ] || set -- "$@" --build-arg "PARENT_IMAGE=$parent_ref" \
 		--build-arg "PARENT_NAME=${parent_ref%@*}" --build-arg "PARENT_DIGEST=${parent_ref##*@}"
-	# BuildKit bildet den Cache-Schlüssel von COPY aus dem Dateiinhalt ohne Zeitstempel;
-	# aus dem Cache käme die Schicht mit den Zeitstempeln eines älteren Builds. Die
-	# Stages runtime und debug sind billig und werden deshalb immer neu gebaut.
-	set -- "$@" --no-cache-filter runtime,debug
 	if [ -n "${OUTPUT_DIR:-}" ]; then
 		set -- "$@" --no-cache --output "type=oci,dest=$OUTPUT_DIR/$name$suffix.tar"
 	else
-		set -- "$@" --load
+		# BuildKit bildet den Cache-Schlüssel von COPY aus dem Dateiinhalt ohne
+		# Zeitstempel; aus dem Cache käme die Schicht mit den Zeitstempeln eines älteren
+		# Builds. Die Stages runtime und debug sind billig und werden immer neu gebaut.
+		set -- "$@" --no-cache-filter runtime,debug --load
 	fi
 
 	echo "==> build $name$suffix ($PLATFORMS) revision=$REVISION epoch=$SOURCE_DATE_EPOCH"

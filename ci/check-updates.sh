@@ -114,10 +114,23 @@ fi
 if $scan; then
 	for img in $(meta order); do
 		ref=$(image_ref "$img")
+		# Ein neues Image ist beim Push noch nicht veröffentlicht; der Image-Workflow läuft parallel.
+		if ! crane digest "$ref" >/dev/null 2>&1; then
+			log "Scan $ref übersprungen: noch nicht veröffentlicht"
+			continue
+		fi
 		for platform in $(meta "$img" platforms | tr ',' ' '); do
 			out="$work/$img-${platform#*/}.trivy.json"
 			log "Scan $ref ($platform)"
-			trivy image -q --image-src remote --platform "$platform" --format json -o "$out" "$ref" >&2
+			if ! scan_err=$(trivy image -q --image-src remote --platform "$platform" --format json -o "$out" "$ref" 2>&1); then
+				finding "Wartungs-Check: Scan von $img:$(meta "$img" tags | head -n1) fehlgeschlagen" \
+"trivy konnte \`$ref\` ($platform) nicht scannen:
+
+\`\`\`
+$(tail -n 5 <<<"$scan_err")
+\`\`\`"
+				break
+			fi
 			if ! result=$(python3 -I "$ROOT/ci/vex.py" gate "$ROOT/images/$img/vex.json" "$out"); then
 				finding "CVE: unbewertete CRITICAL/HIGH in $img:$(meta "$img" tags | head -n1)" \
 "Erneuter Scan von \`$ref\` ($platform) mit trivy, vex.json angewandt:

@@ -1,0 +1,13 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:69cc0478-a09b-4a17-bce2-80e0d1bd2c7f",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "container",
+      "name": "ghcr.io/altner/images/base"
+    }
+  },
+  "vulnerabilities": []
+}

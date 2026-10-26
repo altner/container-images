@@ -11,12 +11,16 @@ static        scratch + /etc/passwd, /etc/group, CA-Bundle   → Go, Rust (stati
        └─ python  + Python-Interpreter (eine Version)         → Python-Webapps
 ```
 
-| Image | Stand | Beschreibung |
+| Image | Tags | Beschreibung |
 |---|---|---|
-| [static](images/static) | verfügbar (lokal) | scratch + passwd/group + CA-Bundle |
-| base | Stufe 2 | |
-| node | Stufe 2 | |
-| python | auf Anforderung | |
+| [static](images/static) | `13.7`, `13.7-debug` | scratch + passwd/group + CA-Bundle |
+| [base](images/base) | `13.7`, `13.7-debug` | static + glibc, libssl, tzdata |
+| [node](images/node) | `24.22.1`, `24.22.1-13.7`, jeweils auch `-debug` | base + Node.js 24 LTS |
+| python | – | erst auf Anforderung |
+
+Die Images entstehen bisher nur lokal; Veröffentlichung, Signatur und SBOM folgen mit Stufe 3.
+
+Die `-debug`-Varianten enthalten zusätzlich ein statisch gelinktes busybox unter `/busybox` (im `PATH`). Sie laufen ebenfalls als `65534:65534` und sind nur für die lokale Fehlersuche gedacht, nie für den Betrieb.
 
 ## Tag-Schema
 
@@ -26,7 +30,7 @@ Registry-Pfad: `ghcr.io/altner/images/<name>`
 |---|---|
 | `static`, `base` | `<debian-version>`, z. B. `static:13.7` |
 | `node`, `python` | `<laufzeit-version>` und `<laufzeit-version>-<debian-version>` |
-| Debug-Varianten | gleiche Tags mit Suffix `-debug` (ab Stufe 2) |
+| Debug-Varianten | gleiche Tags mit Suffix `-debug` |
 
 Die Tags errechnet `shared/scripts/image-meta.sh <name> tags` aus `images/<name>/image.yaml`.
 
@@ -38,7 +42,7 @@ make test-all
 
 | Befehl | Wirkung |
 |---|---|
-| `make build IMAGE=<name>` | baut `linux/amd64` und `linux/arm64` und lädt beides in den lokalen Image-Speicher |
+| `make build IMAGE=<name>` | baut `linux/amd64` und `linux/arm64` (bei `debug: true` auch `-debug`) und lädt alles in den lokalen Image-Speicher; das Eltern-Image muss lokal vorhanden sein |
 | `make test IMAGE=<name>` | baut und testet ein Image |
 | `make test-all` | baut und testet alle Images, Eltern zuerst |
 | `make list` | zeigt die Images in Stammbaum-Reihenfolge |
@@ -55,9 +59,10 @@ Die Ausgabe muss `io.containerd.snapshotter.v1` enthalten.
 
 Die gemeinsame Bibliothek in [shared/tests](shared/tests) liest `image.yaml` und prüft jedes Image auf jeder Plattform:
 
-- **Inhalt:** Das Dateisystem entspricht exakt `expected-files.txt`. Es gibt keine Shell (außer in `-debug`), keine setuid/setgid-Bits, alles gehört `0:0` und ist nicht schreibbar. Es gibt keine hängenden Symlinks, und jedes ELF hat die richtige Architektur.
+- **Inhalt:** Das Dateisystem entspricht exakt `expected-files.txt`, bei `-debug` zusätzlich [shared/tests/expected-debug.txt](shared/tests/expected-debug.txt). Es gibt keine Shell (außer in `-debug`), keine setuid/setgid-Bits, alles gehört `0:0` und ist nicht schreibbar. Es gibt keine hängenden Symlinks, und jedes ELF hat die richtige Architektur.
 - **Konfiguration:** `Config.User` ist `65534:65534`, und die OCI-Labels `source`, `version`, `revision`, `licenses` und `base.name` sind gesetzt.
 - **Bibliotheken:** Jede dynamisch gelinkte Datei wird mit dem Loader des Images (`--list`) aufgelöst; `not found` lässt den Test scheitern.
+- **Debug:** `/busybox/sh` startet und läuft als `65534:65534`.
 - **Laufzeit:** Die Beispiel-App aus `image.yaml` (`example:`) wird auf dem Image gebaut und mit `--read-only --cap-drop ALL --security-opt no-new-privileges` gestartet. Geprüft werden:
   - Healthcheck und `/healthz`
   - UID/GID 65534
@@ -69,8 +74,12 @@ Die gemeinsame Bibliothek in [shared/tests](shared/tests) liest `image.yaml` und
 ## Ein neues Image anlegen
 
 1. `images/static` nach `images/<name>` kopieren.
-2. In `image.yaml` mindestens `name`, `version` und `parent` anpassen. In `expected-files.txt` übernimmt `include <eltern-image>` die Liste des Eltern-Images.
-3. Containerfile schreiben: Inhalt im Builder unter `/out` zusammenstellen, `normalize-epoch.sh /out`, ein `COPY` in die Runtime.
+2. In `image.yaml` mindestens `name`, `version` und `parent` anpassen. In `expected-files.txt` übernimmt `include <eltern-image>` die Liste des Eltern-Images; `@linux/amd64` am Zeilenende beschränkt eine Zeile auf eine Plattform.
+3. Containerfile schreiben, Vorlage ist [images/node/Containerfile](images/node/Containerfile):
+   - `ARG PARENT_IMAGE` (setzt `build-image.sh`).
+   - Inhalt im Builder unter `/out` zusammenstellen, Debian-Pakete mit `extract-debs.sh`, Bibliotheken eines Programms mit `copy-ldd-deps.sh`.
+   - `normalize-epoch.sh /out`, dann ein `COPY` in die Stage `runtime`.
+   - Stage `debug` = `runtime` + `add-busybox.sh`.
 
 `make test IMAGE=<name>` greift dann automatisch.
 
@@ -90,7 +99,7 @@ Stand: 2026-10-26
 | Registry-Pfad | `ghcr.io/altner/images/<name>`, öffentlich |
 | Produktiv-VPS | Hetzner, x86 (`linux/amd64`) |
 | Gebaute Plattformen | `linux/amd64` und `linux/arm64` |
-| Erste Laufzeit | Node (Python erst auf Anforderung) |
+| Erste Laufzeit | Node 24 LTS (Python erst auf Anforderung) |
 | Debian-Version | 13.7 (trixie), aktuelles stable |
 | Debian-Pakete | aus `snapshot.debian.org`, Zeitpunkt aus dem gepinnten Builder-Image |
 

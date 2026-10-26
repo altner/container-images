@@ -2,7 +2,7 @@
 
 ## 13.7 – 2026-10-26
 
-Erste Version.
+Erste Version, mit `-debug`-Variante.
 
 | Baustein | Wert | ermittelt mit |
 |---|---|---|
@@ -10,6 +10,7 @@ Erste Version.
 | Debian-Snapshot | `20261020T213255Z` | Kommentar in `/etc/apt/sources.list.d/debian.sources` des Builders |
 | `base-files` | `13.8+deb13u7` | `apt-cache policy base-files` gegen den Snapshot |
 | `ca-certificates` | `20250419+deb13u1` | `apt-cache policy ca-certificates` gegen den Snapshot |
+| `busybox-static` (nur -debug) | `1:1.37.0-6+b9` | `apt-cache policy busybox-static` gegen den Snapshot |
 | Dockerfile-Frontend | `docker/dockerfile:1.28.0@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b` | `crane digest docker/dockerfile:1.28.0` |
 
 `debian:13.7-slim` und `debian:trixie-20261020-slim` haben dasselbe Digest.

@@ -1,0 +1,70 @@
+# Exakt erlaubter Inhalt von base (Format siehe images/static/expected-files.txt).
+# "@<plattform>" am Zeilenende beschränkt eine Zeile auf diese Plattform.
+include static
+
+f /etc/nsswitch.conf
+
+# glibc (libc6), Loader über merged-/usr
+l /lib
+l /lib64                                          @linux/amd64
+d /usr/lib64                                      @linux/amd64
+l /usr/lib64/ld-linux-x86-64.so.2                 @linux/amd64
+l /usr/lib/ld-linux-aarch64.so.1                  @linux/arm64
+d /usr/lib/*-linux-gnu
+f /usr/lib/*-linux-gnu/ld-linux-*.so.*
+f /usr/lib/*-linux-gnu/libBrokenLocale.so.1
+f /usr/lib/*-linux-gnu/libanl.so.1
+f /usr/lib/*-linux-gnu/libc.so.6
+f /usr/lib/*-linux-gnu/libdl.so.2
+f /usr/lib/*-linux-gnu/libm.so.6
+f /usr/lib/*-linux-gnu/libmvec.so.1
+f /usr/lib/*-linux-gnu/libnsl.so.1
+f /usr/lib/*-linux-gnu/libnss_compat.so.2
+f /usr/lib/*-linux-gnu/libnss_dns.so.2
+f /usr/lib/*-linux-gnu/libnss_files.so.2
+f /usr/lib/*-linux-gnu/libnss_hesiod.so.2
+f /usr/lib/*-linux-gnu/libpthread.so.0
+f /usr/lib/*-linux-gnu/libresolv.so.2
+f /usr/lib/*-linux-gnu/librt.so.1
+f /usr/lib/*-linux-gnu/libutil.so.1
+
+# libgcc-s1 (von glibc für pthread_cancel geladen)
+f /usr/lib/*-linux-gnu/libgcc_s.so.1
+
+# OpenSSL (libssl3t64) und seine Abhängigkeiten zlib, zstd
+f /usr/lib/*-linux-gnu/libssl.so.3
+f /usr/lib/*-linux-gnu/libcrypto.so.3
+l /usr/lib/*-linux-gnu/libz.so.1
+f /usr/lib/*-linux-gnu/libz.so.1.*
+l /usr/lib/*-linux-gnu/libzstd.so.1
+f /usr/lib/*-linux-gnu/libzstd.so.1.*
+d /usr/lib/ssl
+l /usr/lib/ssl/cert.pem
+l /usr/lib/ssl/certs
+
+# tzdata, Standardzeitzone UTC
+l /etc/localtime
+d /usr/share/zoneinfo
+d /usr/share/zoneinfo/*
+f /usr/share/zoneinfo/*
+l /usr/share/zoneinfo/*
+
+# Lizenztexte und Paket-Metadaten
+d /usr/share/doc/libc6
+f /usr/share/doc/libc6/copyright
+d /usr/share/doc/libgcc-s1
+f /usr/share/doc/libgcc-s1/copyright
+d /usr/share/doc/libssl3t64
+f /usr/share/doc/libssl3t64/copyright
+d /usr/share/doc/libzstd1
+f /usr/share/doc/libzstd1/copyright
+d /usr/share/doc/tzdata
+f /usr/share/doc/tzdata/copyright
+d /usr/share/doc/zlib1g
+f /usr/share/doc/zlib1g/copyright
+f /var/lib/dpkg/status.d/libc6
+f /var/lib/dpkg/status.d/libgcc-s1
+f /var/lib/dpkg/status.d/libssl3t64
+f /var/lib/dpkg/status.d/libzstd1
+f /var/lib/dpkg/status.d/tzdata
+f /var/lib/dpkg/status.d/zlib1g

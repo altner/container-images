@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.28.0@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
+
+# In eigenen App-Repos BASE_IMAGE per Digest pinnen:
+#   FROM ghcr.io/altner/images/node:24.22.1@sha256:<digest>
+ARG BASE_IMAGE=ghcr.io/altner/images/node:24.22.1
+
+# Build-Stage: gleiche Node- und Debian-Version (13.7) wie die Runtime, auf der
+# Zielplattform, damit native Addons zur glibc und Architektur passen.
+FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS build
+ARG SOURCE_DATE_EPOCH
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY app.js index.html ./
+RUN find /app -exec touch -h -d "@${SOURCE_DATE_EPOCH:-0}" {} +
+
+FROM ${BASE_IMAGE}
+WORKDIR /app
+COPY --from=build /app /app
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --start-interval=1s CMD ["/usr/local/bin/node", "/app/app.js", "healthcheck"]
+CMD ["/app/app.js"]

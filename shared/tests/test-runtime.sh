@@ -42,7 +42,7 @@ if [ "$(jq -r '.tz' <<<"$health")" = Europe/Berlin ] && jq -re '.local_time | te
 else
 	fail "Zeitzone: $health"
 fi
-curl -fsS "http://127.0.0.1:$port/" | grep -q 'Image-Fabrik' && ok "GET / liefert die eingebettete Seite" || fail "GET / ohne erwarteten Inhalt"
+curl -fsS "http://127.0.0.1:$port/" | grep -q 'Image-Fabrik' && ok "GET / liefert die Startseite" || fail "GET / ohne erwarteten Inhalt"
 
 docker logs "$name" 2>&1 | grep -q 'startup https ok' && ok "HTTPS beim Start mit CA-Bundle des Images" || fail "kein 'startup https ok' im Log"
 

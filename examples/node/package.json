@@ -1,0 +1,14 @@
+{
+  "name": "fabrik-example-node",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Beispiel-Webapp für das Image node der Image-Fabrik",
+  "main": "app.js",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "ms": "2.1.3"
+  }
+}

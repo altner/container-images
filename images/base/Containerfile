@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1.28.0@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
+
+# base: static + glibc, libssl, tzdata. Für dynamisch gelinkte Programme.
+ARG PARENT_IMAGE=ghcr.io/altner/images/static:13.7
+
+FROM debian:13.7-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS builder
+ARG SOURCE_DATE_EPOCH
+COPY --from=shared scripts/ /usr/local/lib/fabrik/
+# libgcc-s1, libzstd1, zlib1g sind Abhängigkeiten von libc6 bzw. libssl3t64;
+# gcc-14-base liefert nur den Lizenztext von libgcc-s1.
+RUN /usr/local/lib/fabrik/extract-debs.sh /stage \
+		gcc-14-base=14.2.0-19 \
+		libc6=2.41-12+deb13u4 \
+		libgcc-s1=14.2.0-19 \
+		libssl3t64=3.5.7-1~deb13u3 \
+		libzstd1=1.5.7+dfsg-1 \
+		tzdata=2026c-0+deb13u1 \
+		zlib1g=1:1.3.dfsg+really1.3.1-1+b1
+
+# Aus libc6 nur die Laufzeitbibliotheken: ohne gconv-Module (iconv), ohne Debug- und
+# Profiling-Bibliotheken. Aus libssl3t64 nur libssl/libcrypto, ohne engines-3.
+# Merged-/usr wie in Debian: /lib -> usr/lib, auf amd64 zusätzlich /lib64 -> usr/lib64.
+# /etc/localtime zeigt wie bei Debians tzdata-Installation auf UTC.
+# OpenSSL findet das CA-Bundle über dieselben Symlinks wie das Debian-Paket openssl.
+COPY rootfs/ /out/
+RUN set -eu; \
+	triplet=$(ls /stage/libc6/usr/lib | grep -- '-linux-gnu$'); \
+	lib=usr/lib/$triplet; \
+	cd /out; \
+	mkdir -p "$lib" usr/share/doc var/lib/dpkg/status.d usr/lib/ssl; \
+	ln -s usr/lib lib; \
+	( cd /stage/libc6 && find usr/lib -maxdepth 2 \( -type f -o -type l \) \
+		! -path '*/gconv/*' ! -name 'libc_malloc_debug.so.*' ! -name 'libmemusage.so' \
+		! -name 'libpcprofile.so' ! -name 'libthread_db.so.*' -print ) | \
+		while read -r f; do cp -P "/stage/libc6/$f" "/out/$f"; done; \
+	if [ -d /stage/libc6/usr/lib64 ]; then cp -a /stage/libc6/usr/lib64 usr/lib64; ln -s usr/lib64 lib64; fi; \
+	cp -P /stage/libgcc-s1/$lib/libgcc_s.so.1 "$lib/"; \
+	cp -P /stage/libssl3t64/$lib/libssl.so.3 /stage/libssl3t64/$lib/libcrypto.so.3 "$lib/"; \
+	cp -P /stage/libzstd1/$lib/libzstd.so.* "$lib/"; \
+	cp -P /stage/zlib1g/$lib/libz.so.* "$lib/"; \
+	cp -a /stage/tzdata/usr/share/zoneinfo usr/share/zoneinfo; \
+	ln -s /usr/share/zoneinfo/Etc/UTC etc/localtime; \
+	ln -s /etc/ssl/certs usr/lib/ssl/certs; \
+	ln -s /etc/ssl/certs/ca-certificates.crt usr/lib/ssl/cert.pem; \
+	for pkg in libc6 libgcc-s1 libssl3t64 libzstd1 tzdata zlib1g; do \
+		doc=$pkg; [ ! -L "/stage/$pkg/usr/share/doc/$pkg" ] || doc=$(readlink "/stage/$pkg/usr/share/doc/$pkg"); \
+		mkdir -p "usr/share/doc/$pkg"; \
+		cp "/stage/$doc/usr/share/doc/$doc/copyright" "usr/share/doc/$pkg/copyright"; \
+		cp "/stage/status.d/$pkg" "var/lib/dpkg/status.d/$pkg"; \
+	done; \
+	chown -R 0:0 /out; \
+	find /out -type d -exec chmod 0755 {} +; \
+	find /out -type f -exec chmod go-w,u-s,g-s {} +; \
+	/usr/local/lib/fabrik/normalize-epoch.sh /out
+
+FROM builder AS debug-builder
+ARG SOURCE_DATE_EPOCH
+RUN /usr/local/lib/fabrik/add-busybox.sh /debug
+
+FROM ${PARENT_IMAGE} AS runtime
+COPY --from=builder /out/ /
+
+ARG VERSION
+ARG REVISION
+ARG PARENT_IMAGE
+LABEL org.opencontainers.image.title="base" \
+	org.opencontainers.image.description="static + glibc, libssl, tzdata (Debian 13.7)" \
+	org.opencontainers.image.version="${VERSION}" \
+	org.opencontainers.image.revision="${REVISION}" \
+	org.opencontainers.image.licenses="LGPL-2.1-or-later AND GPL-2.0-or-later AND GPL-3.0-or-later WITH GCC-exception-3.1 AND Apache-2.0 AND BSD-3-Clause AND Zlib AND MPL-2.0 AND LicenseRef-public-domain" \
+	org.opencontainers.image.base.name="${PARENT_IMAGE}"
+
+# -debug: zusätzlich busybox unter /busybox, nur für die lokale Fehlersuche.
+FROM runtime AS debug
+COPY --from=debug-builder /debug/ /
+ENV PATH=/busybox

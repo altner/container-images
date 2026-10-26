@@ -2,11 +2,11 @@
 """Prüft Inhalt und Konfiguration eines Images aus `docker image save`.
 
 Aufruf:
-  inspect-image.py <image.tar> <plattform> <expected-files.txt>
+  inspect-image.py <image.tar> <plattform> <expected-files.txt> [<weitere.txt> ...]
                    [--allow-shell] [--dynamic-out <datei>]
 
 Geprüft wird das zusammengesetzte Dateisystem aller Schichten (Whiteouts berücksichtigt):
-  - Inhalt entspricht exakt expected-files.txt
+  - Inhalt entspricht exakt den Listen (expected-files.txt, bei -debug plus expected-debug.txt)
   - alles gehört 0:0, nichts ist für Gruppe/andere schreibbar, keine setuid/setgid/sticky-Bits
   - keine Gerätedateien, FIFOs oder hängenden Symlinks
   - keine Shell (außer mit --allow-shell)
@@ -146,24 +146,29 @@ def resolve(fs, path, depth=0):
     return cur
 
 
-def read_expected(path, seen=None):
-    seen = seen or set()
+def read_expected(path, platform, seen=None):
+    """Regeln (typ, muster, herkunft) für eine Plattform; folgt "include <image>"."""
+    seen = seen if seen is not None else set()
     rules = []
     with open(path) as f:
         for n, line in enumerate(f, 1):
-            line = line.split("#", 1)[0].strip()
-            if not line:
+            parts = line.split("#", 1)[0].split()
+            if not parts:
                 continue
-            a, b = line.split(None, 1)
-            if a == "include":
-                inc = posixpath.join(posixpath.dirname(path), "..", b, "expected-files.txt")
+            if parts[0] == "include" and len(parts) == 2:
+                inc = posixpath.normpath(posixpath.join(posixpath.dirname(path), "..", parts[1], "expected-files.txt"))
                 if inc not in seen:
                     seen.add(inc)
-                    rules += read_expected(inc, seen)
-            elif a in ("d", "f", "l"):
-                rules.append((a, b, f"{path}:{n}"))
+                    rules += read_expected(inc, platform, seen)
+            elif parts[0] in ("d", "f", "l") and len(parts) in (2, 3):
+                if len(parts) == 3:
+                    if not parts[2].startswith("@"):
+                        sys.exit(f"FEHLER {path}:{n}: drittes Feld muss @<plattform> sein")
+                    if parts[2][1:] != platform:
+                        continue
+                rules.append((parts[0], parts[1], f"{path}:{n}"))
             else:
-                sys.exit(f"FEHLER {path}:{n}: unbekannter Typ {a!r}")
+                sys.exit(f"FEHLER {path}:{n}: unverständliche Zeile {line.strip()!r}")
     return rules
 
 
@@ -191,7 +196,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("tar")
     ap.add_argument("platform")
-    ap.add_argument("expected")
+    ap.add_argument("expected", nargs="+")
     ap.add_argument("--allow-shell", action="store_true")
     ap.add_argument("--dynamic-out")
     args = ap.parse_args()
@@ -213,7 +218,7 @@ def main():
         ok("OCI-Labels gesetzt")
 
     # Inhalt exakt wie erwartet
-    rules = read_expected(args.expected)
+    rules = [r for e in args.expected for r in read_expected(e, args.platform)]
     hits = {r: 0 for r in rules}
     unexpected = []
     for path, (_, m) in sorted(fs.items()):
@@ -229,7 +234,7 @@ def main():
         if n == 0:
             fail(f"fehlt: {r[0]} {r[1]} ({r[2]})")
     if not unexpected and all(hits.values()):
-        ok(f"Inhalt entspricht expected-files.txt ({len(fs)} Einträge)")
+        ok(f"Inhalt entspricht {' + '.join(posixpath.basename(e) for e in args.expected)} ({len(fs)} Einträge)")
 
     # Eigentum, Rechte, Typen, Symlinks, Shells, ELF
     n_err = len(errors)

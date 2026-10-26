@@ -1,6 +1,6 @@
 # static
 
-`ghcr.io/altner/images/static:13.7`
+`ghcr.io/altner/images/static:13.7` · Debug: `static:13.7-debug`
 
 Leeres Image (`scratch`) mit dem Nötigsten für statisch gelinkte Programme, auf Basis von Debian 13.7.
 
@@ -29,7 +29,7 @@ Der vollständige erlaubte Inhalt steht in [expected-files.txt](expected-files.t
 ## Was es nicht ist
 
 - **Keine Shell, kein Paketmanager, kein dpkg-Status.** Es gibt keine `/var/lib/dpkg/status` und kein apt.
-- **Keine C-Bibliothek.** Dynamisch gelinkte Programme laufen hier nicht; dafür ist `base` gedacht (folgt in Stufe 2).
+- **Keine C-Bibliothek.** Dynamisch gelinkte Programme laufen hier nicht; dafür gibt es [base](../base).
 - **Keine Zeitzonendaten.** Go-Programme binden sie mit `import _ "time/tzdata"` ein.
 - **Kein beschreibbares `/tmp`.** Wer temporäre Dateien braucht, startet mit `--tmpfs /tmp`.
 
@@ -54,4 +54,10 @@ Empfohlener Start:
 
 ```bash
 docker run --read-only --cap-drop ALL --security-opt no-new-privileges -p 8080:8080 <app-image>
+```
+
+Fehlersuche mit Shell (nie im Betrieb):
+
+```bash
+docker run --rm -it ghcr.io/altner/images/static:13.7-debug sh
 ```

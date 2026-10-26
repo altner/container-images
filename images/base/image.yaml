@@ -1,0 +1,8 @@
+# Flaches Format: ein "schlüssel: wert" pro Zeile (gelesen von shared/scripts/image-meta.sh).
+name: base
+version: "13.7"            # Laufzeit-Version; bei static/base die Debian-Version
+debian: "13.7"             # muss DEBIAN_VERSION_FULL in /usr/lib/os-release entsprechen
+parent: static
+platforms: linux/amd64,linux/arm64
+debug: true
+example:                   # keine eigene Beispiel-App; node und python testen darauf

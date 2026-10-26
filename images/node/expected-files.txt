@@ -1,0 +1,18 @@
+# Exakt erlaubter Inhalt von node (Format siehe images/static/expected-files.txt).
+include base
+
+# Node.js: nur die Programmdatei und die Lizenz
+d /usr/local
+d /usr/local/bin
+f /usr/local/bin/node
+d /usr/local/share
+d /usr/local/share/doc
+d /usr/local/share/doc/node
+f /usr/local/share/doc/node/LICENSE
+
+# von ldd ermittelt und nicht schon in base: libstdc++6
+l /usr/lib/*-linux-gnu/libstdc++.so.6
+f /usr/lib/*-linux-gnu/libstdc++.so.6.*
+d /usr/share/doc/libstdc++6
+f /usr/share/doc/libstdc++6/copyright
+f /var/lib/dpkg/status.d/libstdc++6

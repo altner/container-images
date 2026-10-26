@@ -4,5 +4,5 @@ version: "13.7"            # Laufzeit-Version; bei static/base die Debian-Versio
 debian: "13.7"             # muss DEBIAN_VERSION_FULL in /usr/lib/os-release entsprechen
 parent: scratch
 platforms: linux/amd64,linux/arm64
-debug: false               # -debug-Variante folgt in Stufe 2
+debug: true
 example: go                # Beispiel-App, mit der die Laufzeittests laufen

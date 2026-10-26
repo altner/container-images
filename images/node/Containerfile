@@ -1,0 +1,65 @@
+# syntax=docker/dockerfile:1.28.0@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
+
+# node: base + offizielle Node.js-LTS-Binary + exakt die per ldd ermittelten Bibliotheken.
+ARG PARENT_IMAGE=ghcr.io/altner/images/base:13.7
+
+# Offizielle Tarballs von nodejs.org. Die Prüfsummen stammen aus SHASUMS256.txt, dessen
+# Signatur mit dem Node-Release-Schlüssel geprüft wurde (siehe CHANGELOG.md).
+FROM scratch AS node-amd64
+ADD --checksum=sha256:eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c \
+	https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-x64.tar.gz /node.tar.gz
+
+FROM scratch AS node-arm64
+ADD --checksum=sha256:33c37be234ba8bee041961047b19160f4d7d0f164e8e246f78bdd10feff148b3 \
+	https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-arm64.tar.gz /node.tar.gz
+
+ARG TARGETARCH
+FROM node-${TARGETARCH} AS node-dist
+
+FROM ${PARENT_IMAGE} AS parent
+
+# Builder auf der Zielplattform: ldd muss die Binary der Zielarchitektur auflösen.
+FROM debian:13.7-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS builder
+ARG SOURCE_DATE_EPOCH
+COPY --from=shared scripts/ /usr/local/lib/fabrik/
+COPY --from=node-dist /node.tar.gz /tmp/node.tar.gz
+COPY --from=parent /var/lib/dpkg/status.d/ /parent-status/
+# Nur die Programmdatei und die Lizenz; kein npm, npx, corepack, keine Header.
+RUN set -eu; \
+	mkdir -p /out/usr/local/bin /out/usr/local/share/doc/node /tmp/node; \
+	tar -xzf /tmp/node.tar.gz -C /tmp/node --strip-components=1; \
+	cp /tmp/node/bin/node /out/usr/local/bin/node; \
+	cp /tmp/node/LICENSE /out/usr/local/share/doc/node/LICENSE; \
+	/usr/local/lib/fabrik/copy-ldd-deps.sh /out/usr/local/bin/node /out /parent-status \
+		libstdc++6=14.2.0-19; \
+	chown -R 0:0 /out; \
+	find /out -type d -exec chmod 0755 {} +; \
+	find /out -type f -exec chmod go-w,u-s,g-s {} +; \
+	/usr/local/lib/fabrik/normalize-epoch.sh /out
+
+FROM builder AS debug-builder
+ARG SOURCE_DATE_EPOCH
+RUN /usr/local/lib/fabrik/add-busybox.sh /debug
+
+FROM ${PARENT_IMAGE} AS runtime
+COPY --from=builder /out/ /
+ENV PATH=/usr/local/bin
+# --use-openssl-ca: Node nimmt das CA-Bundle des Images statt seiner eingebauten Liste;
+# SSL_CERT_FILE zeigt der statisch gelinkten OpenSSL von Node, wo es liegt.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENTRYPOINT ["/usr/local/bin/node", "--use-openssl-ca"]
+
+ARG VERSION
+ARG REVISION
+ARG PARENT_IMAGE
+LABEL org.opencontainers.image.title="node" \
+	org.opencontainers.image.description="base + Node.js ${VERSION} (Debian 13.7)" \
+	org.opencontainers.image.version="${VERSION}" \
+	org.opencontainers.image.revision="${REVISION}" \
+	org.opencontainers.image.licenses="MIT AND GPL-3.0-or-later WITH GCC-exception-3.1 AND LGPL-2.1-or-later AND GPL-2.0-or-later AND Apache-2.0 AND BSD-3-Clause AND Zlib AND MPL-2.0 AND LicenseRef-public-domain" \
+	org.opencontainers.image.base.name="${PARENT_IMAGE}"
+
+# -debug: zusätzlich busybox unter /busybox, nur für die lokale Fehlersuche.
+FROM runtime AS debug
+COPY --from=debug-builder /debug/ /
+ENV PATH=/usr/local/bin:/busybox

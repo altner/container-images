@@ -1,0 +1,7 @@
+# Zusatzinhalt jeder -debug-Variante (shared/scripts/add-busybox.sh).
+d /busybox
+f /busybox/busybox
+l /busybox/*
+d /usr/share/doc/busybox-static
+f /usr/share/doc/busybox-static/copyright
+f /var/lib/dpkg/status.d/busybox-static

@@ -3,7 +3,7 @@ name = "fabrik-example-python"
 version = "1.0.0"
 description = "Beispiel-Webapp für das Image python der Image-Fabrik"
 license = "Apache-2.0"
-requires-python = "==3.13.*"
+requires-python = "==3.15.*"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",

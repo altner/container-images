@@ -1,0 +1,65 @@
+# Exakt erlaubter Inhalt von python (Format siehe images/static/expected-files.txt).
+include base
+
+# Python 3.13 aus Debian: Interpreter, Standardbibliothek (vorkompiliert), sitecustomize
+d /etc/python3.13
+f /etc/python3.13/sitecustomize.py
+d /usr/bin
+f /usr/bin/python3.13
+l /usr/bin/python3
+l /usr/bin/python
+d /usr/lib/python3.13
+d /usr/lib/python3.13/*
+f /usr/lib/python3.13/*
+l /usr/lib/python3.13/*
+
+# Bibliotheken, die Module der Standardbibliothek brauchen und base nicht hat
+l /usr/lib/*-linux-gnu/libbz2.so.1
+l /usr/lib/*-linux-gnu/libbz2.so.1.0
+f /usr/lib/*-linux-gnu/libbz2.so.1.0.*
+l /usr/lib/*-linux-gnu/libexpat.so.1
+f /usr/lib/*-linux-gnu/libexpat.so.1.*
+l /usr/lib/*-linux-gnu/libffi.so.8
+f /usr/lib/*-linux-gnu/libffi.so.8.*
+l /usr/lib/*-linux-gnu/liblzma.so.5
+f /usr/lib/*-linux-gnu/liblzma.so.5.*
+l /usr/lib/*-linux-gnu/libsqlite3.so.0
+f /usr/lib/*-linux-gnu/libsqlite3.so.0.*
+l /usr/lib/*-linux-gnu/libuuid.so.1
+f /usr/lib/*-linux-gnu/libuuid.so.1.*
+
+# libstdc++6 für C++-Wheels
+l /usr/lib/*-linux-gnu/libstdc++.so.6
+f /usr/lib/*-linux-gnu/libstdc++.so.6.*
+
+# Lizenztexte und Paket-Metadaten
+d /usr/share/doc/libbz2-1.0
+f /usr/share/doc/libbz2-1.0/copyright
+d /usr/share/doc/libexpat1
+f /usr/share/doc/libexpat1/copyright
+d /usr/share/doc/libffi8
+f /usr/share/doc/libffi8/copyright
+d /usr/share/doc/liblzma5
+f /usr/share/doc/liblzma5/copyright
+d /usr/share/doc/libpython3.13-minimal
+f /usr/share/doc/libpython3.13-minimal/copyright
+d /usr/share/doc/libpython3.13-stdlib
+f /usr/share/doc/libpython3.13-stdlib/copyright
+d /usr/share/doc/libsqlite3-0
+f /usr/share/doc/libsqlite3-0/copyright
+d /usr/share/doc/libstdc++6
+f /usr/share/doc/libstdc++6/copyright
+d /usr/share/doc/libuuid1
+f /usr/share/doc/libuuid1/copyright
+d /usr/share/doc/python3.13-minimal
+f /usr/share/doc/python3.13-minimal/copyright
+f /var/lib/dpkg/status.d/libbz2-1.0
+f /var/lib/dpkg/status.d/libexpat1
+f /var/lib/dpkg/status.d/libffi8
+f /var/lib/dpkg/status.d/liblzma5
+f /var/lib/dpkg/status.d/libpython3.13-minimal
+f /var/lib/dpkg/status.d/libpython3.13-stdlib
+f /var/lib/dpkg/status.d/libsqlite3-0
+f /var/lib/dpkg/status.d/libstdc++6
+f /var/lib/dpkg/status.d/libuuid1
+f /var/lib/dpkg/status.d/python3.13-minimal

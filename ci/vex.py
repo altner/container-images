@@ -6,8 +6,10 @@ Qualifier, z. B. "pkg:deb/debian/libc6@2.41-12+deb13u4" (gilt nur für diese
 Version) oder "pkg:deb/debian/libc6" (gilt für jede Version – nur mit Begründung).
 
   vex.py gate <vex.json> <trivy.json> [--fail-on CRITICAL,HIGH] [--report-only]
-      Wendet die VEX-Bewertungen auf einen Trivy-JSON-Report an. Befunde mit
-      analysis.state not_affected oder false_positive gelten als bewertet.
+      Wendet die VEX-Bewertungen auf einen Trivy-JSON-Report an. Als bewertet gelten
+      Befunde mit analysis.state not_affected oder false_positive, außerdem
+      state exploitable mit response "update" ("akzeptiert, bis es einen Fix gibt"),
+      aber nur, solange trivy keine korrigierte Version kennt.
       Exit 1, wenn ein unbewerteter Befund der genannten Schweregrade bleibt;
       mit --report-only werden solche Befunde nur gemeldet (für -debug).
 
@@ -24,6 +26,8 @@ import sys
 import urllib.parse
 
 SUPPRESSING = {"not_affected", "false_positive"}
+# "exploitable" + response "update": Risiko akzeptiert, bis die Distribution einen Fix liefert.
+ACCEPTED_UNTIL_FIX = "exploitable"
 
 
 def purl_key(purl):
@@ -64,18 +68,21 @@ def gate(args):
             purl = (v.get("PkgIdentifier") or {}).get("PURL", "")
             sev = v.get("Severity", "UNKNOWN")
             counts[sev] = counts.get(sev, 0) + 1
-            hit = next(
-                (e for e in vex
-                 if e.get("id") == v["VulnerabilityID"]
-                 and e.get("analysis", {}).get("state") in SUPPRESSING
-                 and any(matches(a.get("ref", ""), purl) for a in e.get("affects", []))),
-                None,
-            )
+            fixed = v.get("FixedVersion")
+            entries = [e for e in vex
+                       if e.get("id") == v["VulnerabilityID"]
+                       and any(matches(a.get("ref", ""), purl) for a in e.get("affects", []))]
             line = f"{sev:8} {v['VulnerabilityID']:18} {v.get('PkgName')} {v.get('InstalledVersion')}"
+            hit = next((e for e in entries if e.get("analysis", {}).get("state") in SUPPRESSING), None)
+            accepted = next((e for e in entries
+                             if e.get("analysis", {}).get("state") == ACCEPTED_UNTIL_FIX
+                             and "update" in e.get("analysis", {}).get("response", [])), None)
             if hit:
                 assessed.append(f"{line}  -> VEX: {hit['analysis']['state']}")
+            elif accepted and not fixed:
+                assessed.append(f"{line}  -> VEX: akzeptiert, bis es einen Fix gibt")
             elif sev in fail_on:
-                open_findings.append(line)
+                open_findings.append(line + (f"  (Fix verfügbar: {fixed})" if fixed else ""))
 
     summary = ", ".join(f"{k}={counts[k]}" for k in sorted(counts)) or "keine"
     print(f"Befunde: {summary}")

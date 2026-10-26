@@ -47,6 +47,8 @@ jobs:
           cosign-release: v3.1.4
 
       - name: Prüfen
+        env:
+          GH_TOKEN: ${{ github.token }}   # gh attestation verify in verify-base-image.sh
         run: |
           ci/check-updates.sh > findings.jsonl
           {

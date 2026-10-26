@@ -96,6 +96,8 @@ jobs:
       # Vor dem Bauen: fremde Basis-Images gepinnt, auflösbar und mit allen Nachweisen
       # aus security/base-image-trust.json.
       - name: Basis-Images prüfen
+        env:
+          GH_TOKEN: ${{ github.token }}   # gh attestation verify (z. B. uv)
         run: security/verify-base-image.sh
 
       - name: Bauen und testen (Stammbaum-Reihenfolge)

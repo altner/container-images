@@ -9,11 +9,13 @@
 #   - per Digest gepinnt (FROM und "# syntax=")
 #   - auflösbar, mit allen Plattformen aus der Trust-Datei
 #   - jede dort verlangte in-toto-Attestierung ist pro Plattform vorhanden
-#   - SLSA-Provenance: Builder und Quelle passen, Subjekt ist das Plattform-Image
+#   - SLSA-Provenance: Builder und (falls verlangt) Quelle passen, Subjekt ist das Plattform-Image
 #   - cosign-Signatur, wo verlangt
+#   - signierte GitHub-Attestierung (gh attestation verify), wo verlangt
 # Außerdem: jedes ADD von einer URL hat --checksum.
 # Neu hinzugekommene Nachweise und gewanderte Tags werden als Hinweis gemeldet.
-# Exit 1 bei jedem Verstoß. Braucht crane, jq und (für Signaturen) cosign.
+# Exit 1 bei jedem Verstoß. Braucht crane, jq, für Signaturen cosign und für
+# GitHub-Attestierungen gh (angemeldet oder mit GH_TOKEN).
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -128,16 +130,28 @@ verify_ref() {
 				prov=$(crane blob "$repo@$layer")
 				if jq -e --arg pd "${pd#sha256:}" --argjson r "$(jq -c .provenance <<<"$rule")" '
 					((.predicate.builder.id // .predicate.runDetails.builder.id // "") | test($r.builder))
-					and ((.predicate.invocation.configSource.uri
-						// .predicate.buildDefinition.externalParameters.configSource.uri // "") | test($r.source))
+					and ($r.source == null or ((.predicate.invocation.configSource.uri
+						// .predicate.buildDefinition.externalParameters.configSource.uri // "") | test($r.source)))
 					and ([.subject[].digest.sha256] | index($pd))' <<<"$prov" >/dev/null; then
-					ok "$platform: Provenance $(jq -r '.predicate.invocation.configSource.uri // .predicate.buildDefinition.externalParameters.configSource.uri' <<<"$prov")"
+					ok "$platform: Provenance $(jq -r '.predicate.invocation.configSource.uri // .predicate.buildDefinition.externalParameters.configSource.uri // .predicate.builder.id // .predicate.runDetails.builder.id' <<<"$prov")"
 				else
 					fail "$platform: Provenance passt nicht: $(jq -c '{builder: (.predicate.builder.id // .predicate.runDetails.builder.id), source: (.predicate.invocation.configSource.uri // .predicate.buildDefinition.externalParameters.configSource.uri), subject: [.subject[].digest.sha256]}' <<<"$prov")"
 				fi
 			fi
 		fi
 	done
+
+	if jq -e '.github_attestation' <<<"$rule" >/dev/null; then
+		local owner workflow
+		owner=$(jq -r .github_attestation.owner <<<"$rule")
+		workflow=$(jq -r '.github_attestation.signer_workflow // empty' <<<"$rule")
+		if gh attestation verify "oci://$repo@$digest" --owner "$owner" \
+			${workflow:+--signer-workflow "$workflow"} >/dev/null 2>&1; then
+			ok "GitHub-Attestierung gültig ($owner${workflow:+, $workflow})"
+		else
+			fail "GitHub-Attestierung fehlt oder ist ungültig ($owner${workflow:+, $workflow})"
+		fi
+	fi
 
 	if jq -e '.cosign' <<<"$rule" >/dev/null; then
 		if cosign verify --certificate-identity "$(jq -r .cosign.identity <<<"$rule")" \

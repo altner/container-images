@@ -16,7 +16,7 @@ static        scratch + /etc/passwd, /etc/group, CA-Bundle   → Go, Rust (stati
 | [static](images/static) | `13.7`, `13.7-debug` | scratch + passwd/group + CA-Bundle |
 | [base](images/base) | `13.7`, `13.7-debug` | static + glibc, libssl, tzdata |
 | [node](images/node) | `24.22.1`, `24.22.1-13.7`, jeweils auch `-debug` | base + Node.js 24 LTS |
-| python | – | erst auf Anforderung |
+| [python](images/python) | `3.13.5`, `3.13.5-13.7`, jeweils auch `-debug` | base + Python 3.13 aus Debian |
 
 Alle Images sind öffentlich unter `ghcr.io/altner/images/<name>`, signiert und mit SBOM, VEX und SLSA-Provenance versehen (siehe [Image verifizieren](#image-verifizieren)).
 
@@ -38,7 +38,7 @@ Die Tags errechnet `shared/scripts/image-meta.sh <name> tags` aus `images/<name>
 
 Für eine bestehende Go- oder Node-App mit Containerfile:
 
-1. **Image wählen und per Digest pinnen.** Go mit `CGO_ENABLED=0` nimmt `static`, Node-Apps nehmen `node`:
+1. **Image wählen und per Digest pinnen.** Go mit `CGO_ENABLED=0` nimmt `static`, Node-Apps nehmen `node`, Python-Apps `python`:
    ```bash
    crane digest ghcr.io/altner/images/node:24.22.1
    ```
@@ -46,6 +46,7 @@ Für eine bestehende Go- oder Node-App mit Containerfile:
 2. **Build-Stage auf dieselbe Debian-Version bringen** (13.7, trixie), damit native Teile zur glibc passen:
    - Go: `golang:<version>-trixie`
    - Node: `node:24.22.1-trixie-slim`, darin `npm ci --omit=dev`, dann das ganze App-Verzeichnis samt `node_modules` kopieren
+   - Python: `debian:13.7-slim` mit dem Python-Paket derselben Version wie im Image, darin das venv mit `uv sync` (siehe [images/python](images/python)), dann das ganze venv kopieren
 3. **Laufzeit anpassen.** Es gibt keine Shell:
    - `CMD`, `ENTRYPOINT` und `HEALTHCHECK` in der Exec-Form (`["…"]`) schreiben.
    - Bei `node` enthält `CMD` nur das Skript (`["/app/app.js"]`).
@@ -58,7 +59,7 @@ Für eine bestehende Go- oder Node-App mit Containerfile:
    ```
 7. **Optional Herkunft prüfen:** Ein Schritt `cosign verify` (siehe [Image verifizieren](#image-verifizieren)) vor dem Deploy. Oder `security/verify-base-image.sh` mit `base-image-trust.json` übernehmen; der Eintrag `ghcr.io/altner/images/*` ist schon da.
 
-Vollständige Vorlagen sind [examples/go](examples/go) und [examples/node](examples/node). Zur Fehlersuche das `-debug`-Tag nehmen und mit `--entrypoint sh` starten.
+Vollständige Vorlagen sind [examples/go](examples/go), [examples/node](examples/node) und [examples/python](examples/python). Zur Fehlersuche das `-debug`-Tag nehmen und mit `--entrypoint sh` starten.
 
 ## Bauen und testen
 
@@ -101,7 +102,7 @@ Die gemeinsame Bibliothek in [shared/tests](shared/tests) liest `image.yaml` und
 
 ## Reproduzierbarkeit
 
-Gleicher Code ergibt das gleiche Image, Bit für Bit. `make repro IMAGE=<name>` baut ein Image samt `-debug` zweimal ohne Cache als OCI-Archiv und vergleicht pro Plattform die `diff_id`s und jede Datei (Typ, Modus, Eigentümer, Zeitstempel, Symlink-Ziel, SHA-256). Auch Manifest- und Index-Digest stimmen überein. Am 2026-10-26 waren `static`, `base` und `node` reproduzierbar.
+Gleicher Code ergibt das gleiche Image, Bit für Bit. `make repro IMAGE=<name>` baut ein Image samt `-debug` zweimal ohne Cache als OCI-Archiv und vergleicht pro Plattform die `diff_id`s und jede Datei (Typ, Modus, Eigentümer, Zeitstempel, Symlink-Ziel, SHA-256). Auch Manifest- und Index-Digest stimmen überein. Am 2026-10-26 waren `static`, `base`, `node` und `python` reproduzierbar. Bei `python` gilt das auch für die vorkompilierte Standardbibliothek.
 
 Das gilt auch über Rechner hinweg: Mit gleichem Commit und gleichem Eltern-Image ergibt ein Build auf dem Mac denselben Digest wie die CI auf GitHub. Für `static` (ohne Eltern-Image) lässt sich das direkt nachprüfen. Der Commit kommt aus dem Label des veröffentlichten Images, gebaut wird in einem eigenen Worktree ohne Cache:
 
@@ -135,7 +136,7 @@ security/verify-base-image.sh
 
 - **Digest-Pin:** jedes `FROM` und `# syntax=` per `@sha256:`; jedes `ADD` von einer URL mit `--checksum`
 - **Auflösbarkeit:** Der Digest existiert und enthält `linux/amd64` und `linux/arm64`.
-- **Nachweise:** Die in der Trust-Datei verlangten in-toto-Attestierungen sind pro Plattform vorhanden. Die SLSA-Provenance nennt den erwarteten Builder und die erwartete Quelle, und ihr Subjekt ist genau dieses Plattform-Image. Wo eine cosign-Regel steht, muss die Signatur gültig sein.
+- **Nachweise:** Die in der Trust-Datei verlangten in-toto-Attestierungen sind pro Plattform vorhanden. Die SLSA-Provenance nennt den erwarteten Builder und, falls verlangt, die erwartete Quelle, und ihr Subjekt ist genau dieses Plattform-Image. Wo eine cosign- oder `github_attestation`-Regel steht, muss die Signatur gültig sein.
 - **Ratsche:** Was einmal in der Trust-Datei steht, muss vorhanden bleiben. Fehlt es bei einem neuen Digest, schlägt die Prüfung und damit die Pipeline fehl. Neue Nachweise meldet das Skript als `HINWEIS`, damit sie aufgenommen werden.
 
 Stand 2026-10-26:
@@ -146,8 +147,9 @@ Stand 2026-10-26:
 | `golang` | SBOM, SLSA-Provenance v0.2 | `github.com/docker-library/golang` |
 | `node` | SBOM, SLSA-Provenance v0.2 | `github.com/nodejs/docker-node` |
 | `docker/dockerfile` | SBOM, SLSA-Provenance v1 | `github.com/moby/buildkit` |
+| `ghcr.io/astral-sh/uv` | SBOM, SLSA-Provenance v0.2, **signierte** GitHub-Attestierung (SLSA v1) | Builder `github.com/astral-sh/uv/actions/runs/…`, signiert von `publish-docker-image.yml` |
 
-Keines dieser Images ist signiert. Die Attestierungen der Docker Official Images sind in-toto-Statements im Image-Index ohne eigene Signatur. Sie sind über den gepinnten Digest an das Image gebunden, belegen aber nicht für sich, wer sie ausgestellt hat. Für die Fabrik-Images selbst verlangt die Trust-Datei eine cosign-Signatur. App-Repos können Skript und Trust-Datei übernehmen.
+Außer `uv` ist keines dieser Images signiert. Für `uv` prüft die Regel `github_attestation` die Signatur mit `gh attestation verify`. In der CI braucht das `GH_TOKEN`. Die Attestierungen der Docker Official Images sind in-toto-Statements im Image-Index ohne eigene Signatur. Sie sind über den gepinnten Digest an das Image gebunden, belegen aber nicht für sich, wer sie ausgestellt hat. Für die Fabrik-Images selbst verlangt die Trust-Datei eine cosign-Signatur. App-Repos können Skript und Trust-Datei übernehmen.
 
 ## Wartung
 
@@ -157,6 +159,7 @@ Keines dieser Images ist signiert. Die Attestierungen der Docker Official Images
 |---|---|
 | neue Debian-Point-Release oder neues stable | `deb.debian.org/debian/dists/stable/Release` |
 | neue Node.js-Version der genutzten Linie (mit Sicherheits-Kennzeichen), neue LTS-Linie, Ende der Linie in weniger als 90 Tagen | `nodejs.org/dist/index.json`, `nodejs/Release/schedule.json` |
+| neue Paketversion von `python3.13` in Debian, Ende von Python 3.13 | `api.ftp-master.debian.org` (madison), Paketliste von `trixie-security`, `endoflife.date` |
 | neue CVEs in den veröffentlichten Images (CRITICAL/HIGH, nicht in `vex.json` bewertet) | trivy gegen `ghcr.io` |
 | fehlende oder neue Nachweise der Basis-Images | `security/verify-base-image.sh` |
 
@@ -166,7 +169,7 @@ Lokal ohne Issues:
 ci/check-updates.sh
 ```
 
-Eine Python-Prüfung kommt mit dem Python-Image.
+Für Python meldet der Check neue Paketversionen von `python3.13` in Debian (stable und security) und das nahende Ende von Python 3.13. Die Upstream-Version nennt er nur zur Information, denn das Image folgt bewusst Debian.
 
 **Renovate** ([renovate.json](renovate.json)) hält aktuell:
 
@@ -226,6 +229,8 @@ Werkzeuge in der CI, gepinnt im Workflow (Actions per Commit-SHA): Runner Ubuntu
 ```
 
 Mit Version gilt die Bewertung nur für genau diese Paketversion. Ohne Version (`pkg:deb/debian/libc6`) gilt sie auch für spätere Versionen; das sollte die Ausnahme bleiben.
+
+Als bewertet gelten `not_affected` und `false_positive`, außerdem **„akzeptiert, bis es einen Fix gibt“**: `"state": "exploitable"` mit `"response": ["update"]` und einer Begründung in `detail`. Das ist für Lücken gedacht, die die Distribution noch nicht behoben hat und die im allgemeinen Image nicht als „nicht betroffen“ gelten können. Eine solche Bewertung wirkt nur, solange trivy keine korrigierte Version kennt. Liefert Debian einen Fix, ist der Befund wieder offen. Dann scheitern Pipeline und Wartungs-Check, bis das Image mit dem korrigierten Paket neu gebaut ist. Ein Beispiel ist [images/python/vex.json](images/python/vex.json).
 
 ## Image verifizieren
 
@@ -293,7 +298,7 @@ Stand: 2026-10-26
 | Registry-Pfad | `ghcr.io/altner/images/<name>`, öffentlich |
 | Produktiv-VPS | Hetzner, x86 (`linux/amd64`) |
 | Gebaute Plattformen | `linux/amd64` und `linux/arm64` |
-| Erste Laufzeit | Node 24 LTS (Python erst auf Anforderung) |
+| Laufzeiten | Node 24 LTS; Python 3.13 aus Debian (seit 2026-10-26, für soinow-net) |
 | Debian-Version | 13.7 (trixie), aktuelles stable |
 | Debian-Pakete | aus `snapshot.debian.org`, Zeitpunkt aus dem gepinnten Builder-Image |
 

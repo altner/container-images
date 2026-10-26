@@ -1,0 +1,171 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:7c1ed583-9d76-4909-8e2a-cd7f36cee8af",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "container",
+      "name": "ghcr.io/altner/images/python"
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-15308",
+      "analysis": {
+        "state": "exploitable",
+        "response": [
+          "update"
+        ],
+        "detail": "CPU-DoS im HTML-Parser (html.parser) bei wiederholt unvollständigen Markup-Deklarationen; betrifft Apps, die nicht vertrauenswürdiges HTML parsen. Debian hat am 2026-10-26 keinen Fix; akzeptiert, bis einer verfügbar ist (dann neu bauen)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2+deb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-19445",
+      "analysis": {
+        "state": "exploitable",
+        "response": [
+          "update"
+        ],
+        "detail": "Use-after-free bei server-seitigem SSLContext mit sni_callback; betrifft Apps, die selbst TLS mit SNI-Callback terminieren. Debian hat am 2026-10-26 keinen Fix; akzeptiert, bis einer verfügbar ist (dann neu bauen)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2+deb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-19553",
+      "analysis": {
+        "state": "exploitable",
+        "response": [
+          "update"
+        ],
+        "detail": "Zertifikatsprüfung umgehbar bei fehlendem server_hostname; betrifft TLS-Clients, die ssl ohne server_hostname nutzen. Debian hat am 2026-10-26 keinen Fix; akzeptiert, bis einer verfügbar ist (dann neu bauen)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2+deb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-7210",
+      "analysis": {
+        "state": "exploitable",
+        "response": [
+          "update"
+        ],
+        "detail": "DoS über präparierte XML-Dokumente (Expat); betrifft Apps, die nicht vertrauenswürdiges XML parsen. Debian hat am 2026-10-26 keinen Fix; akzeptiert, bis einer verfügbar ist (dann neu bauen)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2+deb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-82049",
+      "analysis": {
+        "state": "exploitable",
+        "response": [
+          "update"
+        ],
+        "detail": "tarfile: Dateien ändern bzw. Inhalte offenlegen über präparierte Archive; betrifft Apps, die nicht vertrauenswürdige tar-Archive entpacken. Debian hat am 2026-10-26 keinen Fix; akzeptiert, bis einer verfügbar ist (dann neu bauen)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2+deb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2+deb13u5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76642",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Betrifft Programme aus util-linux (mount-Helfer, nsenter). Das Image enthält aus libuuid1 nur die Bibliothek libuuid.so.1, keines dieser Programme."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78408",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Betrifft Programme aus util-linux (mount-Helfer, nsenter). Das Image enthält aus libuuid1 nur die Bibliothek libuuid.so.1, keines dieser Programme."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78409",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Betrifft Programme aus util-linux (mount-Helfer, nsenter). Das Image enthält aus libuuid1 nur die Bibliothek libuuid.so.1, keines dieser Programme."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78410",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Betrifft Programme aus util-linux (mount-Helfer, nsenter). Das Image enthält aus libuuid1 nur die Bibliothek libuuid.so.1, keines dieser Programme."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
+        }
+      ]
+    }
+  ]
+}

@@ -4,42 +4,87 @@
     "Geprüft von security/verify-base-image.sh. Jedes genutzte Image braucht hier einen Eintrag.",
     "attestations: in-toto-Prädikattypen, die pro Plattform im Image-Index vorhanden sein müssen.",
     "provenance: reguläre Ausdrücke für Builder-ID und Quelle aus der SLSA-Provenance.",
+    "github_attestation: signierte Attestierung aus GitHub (gh attestation verify), owner und optional signer_workflow.",
     "cosign: Identität und Aussteller, mit denen die Signatur geprüft wird.",
     "Ein Nachweis wird aufgenommen, sobald er vorhanden ist, und nie still entfernt: Fehlt er später, bricht die Prüfung ab.",
     "Stand der Nachweise: 2026-10-26, ermittelt mit crane manifest/blob und cosign tree."
   ],
   "images": {
     "debian": {
-      "platforms": ["linux/amd64", "linux/arm64"],
-      "attestations": ["https://spdx.dev/Document"]
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "attestations": [
+        "https://spdx.dev/Document"
+      ]
     },
     "golang": {
-      "platforms": ["linux/amd64", "linux/arm64"],
-      "attestations": ["https://spdx.dev/Document", "https://slsa.dev/provenance/v0.2"],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "attestations": [
+        "https://spdx.dev/Document",
+        "https://slsa.dev/provenance/v0.2"
+      ],
       "provenance": {
         "builder": "^https://github\\.com/docker-library$",
         "source": "^https://github\\.com/docker-library/golang\\.git#"
       }
     },
     "node": {
-      "platforms": ["linux/amd64", "linux/arm64"],
-      "attestations": ["https://spdx.dev/Document", "https://slsa.dev/provenance/v0.2"],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "attestations": [
+        "https://spdx.dev/Document",
+        "https://slsa.dev/provenance/v0.2"
+      ],
       "provenance": {
         "builder": "^https://github\\.com/docker-library$",
         "source": "^https://github\\.com/nodejs/docker-node\\.git#"
       }
     },
     "docker/dockerfile": {
-      "platforms": ["linux/amd64", "linux/arm64"],
-      "attestations": ["https://spdx.dev/Document", "https://slsa.dev/provenance/v1"],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "attestations": [
+        "https://spdx.dev/Document",
+        "https://slsa.dev/provenance/v1"
+      ],
       "provenance": {
         "builder": "^https://github\\.com/moby/buildkit/actions/runs/",
         "source": "^https://github\\.com/moby/buildkit\\.git#refs/tags/dockerfile/"
       }
     },
+    "ghcr.io/astral-sh/uv": {
+      "$comment": "uv im Build-Stage von examples/python. Signierte SLSA-v1-Provenance über GitHub-Attestierungen, signiert von publish-docker-image.yml (aufgerufen von release.yml); die BuildKit-Provenance im Index nennt keine Quelle.",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "attestations": [
+        "https://spdx.dev/Document",
+        "https://slsa.dev/provenance/v0.2"
+      ],
+      "provenance": {
+        "builder": "^https://github\\.com/astral-sh/uv/actions/runs/"
+      },
+      "github_attestation": {
+        "owner": "astral-sh",
+        "signer_workflow": "astral-sh/uv/.github/workflows/publish-docker-image.yml"
+      }
+    },
     "ghcr.io/altner/images/*": {
       "$comment": "Die Fabrik-Images selbst, für App-Repos, die dieses Skript übernehmen.",
-      "platforms": ["linux/amd64", "linux/arm64"],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
       "cosign": {
         "identity": "https://github.com/altner/container-images/.github/workflows/images.yml@refs/heads/main",
         "issuer": "https://token.actions.githubusercontent.com"

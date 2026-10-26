@@ -8,6 +8,7 @@
 #   - neue Debian-Point-Release oder neue stable-Version gegenüber image.yaml
 #   - neue Node.js-Version in der genutzten LTS-Linie (mit Sicherheits-Kennzeichen),
 #     neue LTS-Linie, nahendes Ende der genutzten Linie
+#   - neue Paketversion von python3.13 in Debian (stable, security), Ende von Python 3.13
 #   - neue CVEs: veröffentlichte Images erneut mit trivy scannen, vex.json anwenden
 #   - Basis-Images: security/verify-base-image.sh (fehlende oder neue Nachweise)
 set -euo pipefail
@@ -76,6 +77,36 @@ Sicherheitsrelease laut nodejs.org: $security
 	end=$(jq -r --arg m "v$major" '.[$m].end' <<<"$schedule")
 	if [ "$(date -u +%s)" -gt $(($(date -u -d "$end" +%s 2>/dev/null || date -u -j -f %Y-%m-%d "$end" +%s) - 90 * 86400)) ]; then
 		finding "Node.js $major erreicht am $end das Ende" "Die genutzte Linie $major wird ab $end nicht mehr gepflegt. Wechsel auf eine neuere LTS-Linie planen."
+	fi
+fi
+
+# --- Python (aus Debian) --------------------------------------------------------------
+if [ -d "$ROOT/images/python" ]; then
+	pinned=$(sed -n 's/.*python3\.13-minimal=\([^ \\]*\).*/\1/p' "$ROOT/images/python/Containerfile" | head -n1)
+	in_stable=$(curl -fsS 'https://api.ftp-master.debian.org/madison?package=python3.13&s=stable&text=on' |
+		awk -F'|' 'NR == 1 { gsub(/ /, "", $2); print $2 }')
+	# Das Sicherheits-Archiv kennt die ftp-master-API nicht; dessen Paketliste direkt lesen.
+	in_security=$(python3 -I -c '
+import lzma, urllib.request
+url = "https://security.debian.org/debian-security/dists/trixie-security/main/binary-amd64/Packages.xz"
+for block in lzma.decompress(urllib.request.urlopen(url, timeout=30).read()).decode().split("\n\n"):
+    if block.startswith("Package: python3.13-minimal\n"):
+        print(next(l[9:] for l in block.splitlines() if l.startswith("Version: ")))
+')
+	newest=$(printf '%s\n' "$pinned" "$in_stable" $in_security | sort -V | tail -n1)
+	eol=$(curl -fsS https://endoflife.date/api/python/3.13.json)
+	log "Python: Image $pinned, Debian stable $in_stable, security ${in_security:-–}"
+	if [ "$newest" != "$pinned" ]; then
+		finding "Python 3.13 aus Debian: $newest verfügbar (Image: $pinned)" \
+"Debian hat eine neue Paketversion von python3.13: $newest (stable: $in_stable, security: ${in_security:-keine}). Das Image nutzt $pinned.
+
+Upstream ist bei $(jq -r .latest <<<"$eol"); das Image folgt bewusst Debian.
+
+- Zu tun: Builder-Digest bzw. Snapshot und die Versionen in \`images/python/Containerfile\`, \`examples/python/Containerfile\` und CHANGELOG anheben, dann \`make test IMAGE=python\`. Mit \`vex.json\` abgleichen: Einträge \"akzeptiert, bis es einen Fix gibt\" entfernen, sobald der Fix enthalten ist."
+	fi
+	py_end=$(jq -r .eol <<<"$eol")
+	if [ "$(date -u +%s)" -gt $(($(date -u -d "$py_end" +%s 2>/dev/null || date -u -j -f %Y-%m-%d "$py_end" +%s) - 90 * 86400)) ]; then
+		finding "Python 3.13 erreicht am $py_end das Ende" "Python 3.13 wird ab $py_end nicht mehr gepflegt. Wechsel auf eine neuere Version planen (mit der nächsten Debian-Version)."
 	fi
 fi
 

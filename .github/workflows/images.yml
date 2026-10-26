@@ -1,0 +1,133 @@
+# Baut den Stammbaum (Eltern zuerst) für amd64 und arm64, testet, erzeugt SBOM,
+# scannt, veröffentlicht nach ghcr.io, signiert keyless und attestiert SBOM, VEX und
+# SLSA-Provenance. Ein neu gebautes Eltern-Image zieht immer alle Kinder mit, weil
+# jeder Lauf den ganzen Stammbaum baut.
+#
+# Pull Requests: bauen, testen, scannen – ohne Veröffentlichung.
+name: images
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write   # Push nach ghcr.io
+      id-token: write   # cosign keyless
+    outputs:
+      images: ${{ steps.publish.outputs.images }}
+    env:
+      PUBLISH: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      # Gleiche Engine wie lokal, mit containerd-Image-Speicher für Multi-Arch-Images.
+      - uses: docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5 # v5.6.0
+        with:
+          version: v29.8.1
+          daemon-config: |
+            { "features": { "containerd-snapshotter": true } }
+
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          syft-version: v1.55.0
+
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.76.1
+          cache: true
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.4
+
+      - name: Werkzeuge
+        run: |
+          docker version --format 'docker {{.Server.Version}}'
+          docker info --format '{{json .DriverStatus}}'
+          syft version | grep '^Version'; trivy --version | head -1; cosign version | grep GitVersion
+
+      - name: Bauen und testen (Stammbaum-Reihenfolge)
+        run: make test-all
+
+      - name: SBOM und Scan
+        run: |
+          set -o pipefail
+          for img in $(make --no-print-directory list); do
+            ci/sbom-scan.sh "$img" | tee -a scan.log
+          done
+
+      - name: Scan-Zusammenfassung
+        if: always()
+        run: |
+          {
+            echo '## SBOM und Scan'
+            echo '```'
+            grep -E '^(==|ok|FEHLER|OFFEN|GEMELDET|bewertet|Befunde)' scan.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Anmelden bei ghcr.io
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Veröffentlichen, signieren, SBOM/VEX attestieren
+        id: publish
+        if: env.PUBLISH == 'true'
+        run: |
+          for img in $(make --no-print-directory list); do
+            ci/publish.sh "$img" >> images.jsonl
+          done
+          echo "images=$(jq -cs . images.jsonl)" >> "$GITHUB_OUTPUT"
+          {
+            echo '## Veröffentlicht'
+            jq -r '"- `\(.image)@\(.digest)`"' images.jsonl
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Artefakte
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-scan
+          path: build/ci/
+          if-no-files-found: ignore
+
+  # SLSA-Provenance (Build Level 3) aus einem isolierten, vertrauenswürdigen Builder.
+  # Das Referenzieren per Tag statt Commit-SHA verlangt der Generator für seine Prüfung.
+  provenance:
+    needs: build
+    if: needs.build.outputs.images != ''
+    permissions:
+      actions: read     # Workflow-Lauf lesen
+      id-token: write   # Provenance signieren
+      packages: write   # Provenance nach ghcr.io schreiben
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.build.outputs.images) }}
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ matrix.image }}
+      digest: ${{ matrix.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}

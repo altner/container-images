@@ -1,0 +1,27 @@
+# Exakt erlaubter Inhalt von static. Format: <typ> <pfad>
+#   d = Verzeichnis, f = Datei, l = Symlink; * und ? sind als Muster erlaubt.
+#   "include <image>" übernimmt die Liste eines anderen Images (für Kinder-Images).
+# Jeder Eintrag im Image muss eine Zeile treffen, jede Zeile mindestens einen Eintrag.
+d /etc
+f /etc/debian_version
+f /etc/group
+l /etc/os-release
+f /etc/passwd
+d /etc/ssl
+d /etc/ssl/certs
+f /etc/ssl/certs/ca-certificates.crt
+d /usr
+d /usr/lib
+f /usr/lib/os-release
+d /usr/share
+d /usr/share/doc
+d /usr/share/doc/base-files
+f /usr/share/doc/base-files/copyright
+d /usr/share/doc/ca-certificates
+f /usr/share/doc/ca-certificates/copyright
+d /var
+d /var/lib
+d /var/lib/dpkg
+d /var/lib/dpkg/status.d
+f /var/lib/dpkg/status.d/base-files
+f /var/lib/dpkg/status.d/ca-certificates

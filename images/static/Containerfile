@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1.28.0@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
+
+# static: scratch + /etc/passwd, /etc/group, CA-Bundle.
+# Für statisch gelinkte Programme (Go mit CGO_ENABLED=0, Rust mit musl).
+
+# Builder läuft auf der Zielplattform; die Paketauswahl ist damit für jede Architektur echt.
+FROM debian:13.7-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS builder
+ARG SOURCE_DATE_EPOCH
+COPY --from=shared scripts/ /usr/local/lib/fabrik/
+RUN /usr/local/lib/fabrik/extract-debs.sh /stage \
+		base-files=13.8+deb13u7 \
+		ca-certificates=20250419+deb13u1
+
+# CA-Bundle wie update-ca-certificates: alle Mozilla-Zertifikate, sortiert, aneinandergehängt.
+# Aus base-files nur os-release und debian_version (OS-Erkennung von syft bzw. trivy),
+# dazu die Lizenztexte.
+COPY --from=shared rootfs/ /out/
+RUN set -eu; \
+	cd /out; \
+	mkdir -p etc/ssl/certs usr/lib usr/share/doc/base-files usr/share/doc/ca-certificates var/lib/dpkg/status.d; \
+	find /stage/ca-certificates/usr/share/ca-certificates/mozilla -name '*.crt' | LC_ALL=C sort | \
+		while read -r crt; do cat "$crt"; [ -z "$(tail -c1 "$crt")" ] || echo; done \
+		> etc/ssl/certs/ca-certificates.crt; \
+	cp /stage/base-files/usr/lib/os-release usr/lib/os-release; \
+	cp /stage/base-files/etc/debian_version etc/debian_version; \
+	ln -s ../usr/lib/os-release etc/os-release; \
+	for pkg in base-files ca-certificates; do \
+		cp "/stage/$pkg/usr/share/doc/$pkg/copyright" "usr/share/doc/$pkg/copyright"; \
+		cp "/stage/status.d/$pkg" "var/lib/dpkg/status.d/$pkg"; \
+	done; \
+	chown -R 0:0 /out; \
+	find /out -type d -exec chmod 0755 {} +; \
+	find /out -type f -exec chmod 0644 {} +; \
+	/usr/local/lib/fabrik/normalize-epoch.sh /out
+
+FROM scratch
+COPY --from=builder /out/ /
+USER 65534:65534
+
+ARG VERSION
+ARG REVISION
+LABEL org.opencontainers.image.title="static" \
+	org.opencontainers.image.description="scratch + passwd/group + CA-Bundle (Debian 13.7)" \
+	org.opencontainers.image.source="https://github.com/altner/container-images" \
+	org.opencontainers.image.version="${VERSION}" \
+	org.opencontainers.image.revision="${REVISION}" \
+	org.opencontainers.image.licenses="MPL-2.0 AND GPL-2.0-or-later" \
+	org.opencontainers.image.base.name="scratch"

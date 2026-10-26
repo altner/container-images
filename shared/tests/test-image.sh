@@ -75,12 +75,13 @@ fi
 example=$(meta "$name" example)
 if [ -n "$example" ]; then
 	app="fabrik-example/$example:$name"
+	# Per Digest, damit BuildKit das frisch gebaute Image nimmt, nicht das aus der Registry.
 	section "Beispiel $example auf $img bauen"
 	SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git -C "$ROOT" log -1 --format=%ct)} \
 		docker buildx build --quiet \
 		--platform "$(meta "$name" platforms)" \
 		--build-arg SOURCE_DATE_EPOCH \
-		--build-arg BASE_IMAGE="$img" \
+		--build-arg BASE_IMAGE="$img@$(docker image inspect --format '{{.Id}}' "$img")" \
 		--provenance=false --load -t "$app" \
 		-f "$ROOT/examples/$example/Containerfile" "$ROOT/examples/$example" >/dev/null
 	ok "gebaut: $app"

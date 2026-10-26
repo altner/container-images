@@ -45,6 +45,8 @@ make test-all
 | `make build IMAGE=<name>` | baut `linux/amd64` und `linux/arm64` (bei `debug: true` auch `-debug`) und lädt alles in den lokalen Image-Speicher; das Eltern-Image muss lokal vorhanden sein |
 | `make test IMAGE=<name>` | baut und testet ein Image |
 | `make test-all` | baut und testet alle Images, Eltern zuerst |
+| `make repro IMAGE=<name>` | baut zweimal ohne Cache und vergleicht: gleiche `diff_id`s, gleicher Inhalt Datei für Datei |
+| `make scan IMAGE=<name>` | SBOM und CVE-Scan wie in der CI |
 | `make list` | zeigt die Images in Stammbaum-Reihenfolge |
 
 Voraussetzung ist Docker mit containerd-Image-Speicher, damit beide Architekturen unter einem Tag liegen können. Prüfen:
@@ -70,6 +72,82 @@ Die gemeinsame Bibliothek in [shared/tests](shared/tests) liest `image.yaml` und
   - der HTTPS-Request beim Start
   - SIGTERM → Exit 0 ohne Fehler im Log
   - die **Negativkontrolle**: Mit einem leeren tmpfs über `/etc/ssl/certs` scheitert der HTTPS-Request mit einem Zertifikatsfehler.
+
+## Reproduzierbarkeit
+
+Gleicher Code ergibt das gleiche Image, Bit für Bit. `make repro IMAGE=<name>` baut ein Image samt `-debug` zweimal ohne Cache als OCI-Archiv und vergleicht pro Plattform die `diff_id`s und jede Datei (Typ, Modus, Eigentümer, Zeitstempel, Symlink-Ziel, SHA-256). Auch Manifest- und Index-Digest stimmen überein. Am 2026-10-26 waren `static`, `base` und `node` reproduzierbar.
+
+Das gilt auch über Rechner hinweg: Mit gleichem Commit und gleichem Eltern-Image ergibt ein Build auf dem Mac denselben Digest wie die CI auf GitHub. Für `static` (ohne Eltern-Image) lässt sich das direkt nachprüfen. Der Commit kommt aus dem Label des veröffentlichten Images, gebaut wird in einem eigenen Worktree ohne Cache:
+
+```bash
+rev=$(crane config ghcr.io/altner/images/static:13.7 | jq -r '.config.Labels["org.opencontainers.image.revision"]')
+git worktree add ../fabrik-repro "$rev"
+cd ../fabrik-repro && SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) REVISION="$rev" OUTPUT_DIR="$PWD" shared/scripts/build-image.sh static
+tar -xOf static.tar index.json | jq -r '.manifests[0].digest'; crane digest ghcr.io/altner/images/static:13.7
+```
+
+Beide Digests sind gleich. Danach `git worktree remove ../fabrik-repro`.
+
+Woran das hängt:
+
+- Basis-Images und Dockerfile-Frontend sind per Digest gepinnt, Debian-Pakete per Version aus dem Snapshot des Builder-Images.
+- Die Node-Binary ist per Prüfsumme gepinnt.
+- Alle Zeitstempel im Inhalt sind `SOURCE_DATE_EPOCH`, also die Zeit des letzten Commits. BuildKit setzt damit auch das Erstelldatum.
+- Das Label `revision` enthält den Commit; ein neuer Commit ergibt deshalb neue Digests bei gleichem Inhalt (gleiche `diff_id`s).
+- Eltern-Images übergibt `build-image.sh` per Digest des lokal gebauten Images. Bei einem Tag nähme BuildKit das gleichnamige Image aus der Registry, sobald es dort eines gibt. Das Label `org.opencontainers.image.base.digest` hält den Digest fest.
+- BuildKit bildet den Cache-Schlüssel von `COPY` ohne Zeitstempel. Die Stages `runtime` und `debug` werden deshalb immer ohne Cache gebaut, sonst übernähmen sie die Zeitstempel eines älteren Builds.
+
+## Basis-Images prüfen
+
+Fremde Images, die die Containerfiles nutzen, prüft [security/verify-base-image.sh](security/verify-base-image.sh) gegen [security/base-image-trust.json](security/base-image-trust.json), lokal und in der CI vor jedem Build:
+
+```bash
+security/verify-base-image.sh
+```
+
+- **Digest-Pin:** jedes `FROM` und `# syntax=` per `@sha256:`; jedes `ADD` von einer URL mit `--checksum`
+- **Auflösbarkeit:** Der Digest existiert und enthält `linux/amd64` und `linux/arm64`.
+- **Nachweise:** Die in der Trust-Datei verlangten in-toto-Attestierungen sind pro Plattform vorhanden. Die SLSA-Provenance nennt den erwarteten Builder und die erwartete Quelle, und ihr Subjekt ist genau dieses Plattform-Image. Wo eine cosign-Regel steht, muss die Signatur gültig sein.
+- **Ratsche:** Was einmal in der Trust-Datei steht, muss vorhanden bleiben. Fehlt es bei einem neuen Digest, schlägt die Prüfung und damit die Pipeline fehl. Neue Nachweise meldet das Skript als `HINWEIS`, damit sie aufgenommen werden.
+
+Stand 2026-10-26:
+
+| Image | Nachweise | Provenance-Quelle |
+|---|---|---|
+| `debian` | SBOM (SPDX) | keine |
+| `golang` | SBOM, SLSA-Provenance v0.2 | `github.com/docker-library/golang` |
+| `node` | SBOM, SLSA-Provenance v0.2 | `github.com/nodejs/docker-node` |
+| `docker/dockerfile` | SBOM, SLSA-Provenance v1 | `github.com/moby/buildkit` |
+
+Keines dieser Images ist signiert. Die Attestierungen der Docker Official Images sind in-toto-Statements im Image-Index ohne eigene Signatur. Sie sind über den gepinnten Digest an das Image gebunden, belegen aber nicht für sich, wer sie ausgestellt hat. Für die Fabrik-Images selbst verlangt die Trust-Datei eine cosign-Signatur. App-Repos können Skript und Trust-Datei übernehmen.
+
+## Wartung
+
+**Täglich** (05:17 UTC) läuft [.github/workflows/maintenance.yml](.github/workflows/maintenance.yml) mit [ci/check-updates.sh](ci/check-updates.sh). Jeder Befund wird ein Issue mit Label `wartung`; ist schon eins mit gleichem Titel offen, entsteht kein zweites.
+
+| Prüfung | Quelle |
+|---|---|
+| neue Debian-Point-Release oder neues stable | `deb.debian.org/debian/dists/stable/Release` |
+| neue Node.js-Version der genutzten Linie (mit Sicherheits-Kennzeichen), neue LTS-Linie, Ende der Linie in weniger als 90 Tagen | `nodejs.org/dist/index.json`, `nodejs/Release/schedule.json` |
+| neue CVEs in den veröffentlichten Images (CRITICAL/HIGH, nicht in `vex.json` bewertet) | trivy gegen `ghcr.io` |
+| fehlende oder neue Nachweise der Basis-Images | `security/verify-base-image.sh` |
+
+Lokal ohne Issues:
+
+```bash
+ci/check-updates.sh
+```
+
+Eine Python-Prüfung kommt mit dem Python-Image.
+
+**Renovate** ([renovate.json](renovate.json)) hält aktuell:
+
+- **Digests** der Basis-Images, gesammelt in einem PR
+- **GitHub Actions**, per Commit-SHA gepinnt
+- **Werkzeuge in den Workflows:** Docker, syft, trivy, cosign, crane (über `# renovate:`-Kommentare)
+- **npm-Abhängigkeiten** des Node-Beispiels und das `golang`-Build-Image
+
+Neue Versionen von `debian` und `node` schlägt Renovate bewusst nicht vor. Sie kommen als Wartungs-Issue, weil dafür Paket-Pins, Prüfsummen und `image.yaml` mitgeändert werden müssen. Renovate läuft erst, wenn die [Renovate-App](https://github.com/apps/renovate) für das Repository installiert ist.
 
 ## Ein neues Image anlegen
 
@@ -101,7 +179,7 @@ Die gemeinsame Bibliothek in [shared/tests](shared/tests) liest `image.yaml` und
 
 Lokal lassen sich SBOM und Scan mit `make scan IMAGE=<name>` nachvollziehen.
 
-Werkzeuge in der CI, gepinnt im Workflow (Actions per Commit-SHA): Docker 29.8.1 mit containerd-Image-Speicher, syft 1.55.0, trivy 0.76.1, cosign 3.1.4, slsa-github-generator 2.1.0. Jeder Lauf baut den ganzen Stammbaum neu. Die Images bekommen dabei neue Digests, weil das Label `revision` den Commit enthält.
+Werkzeuge in der CI, gepinnt im Workflow (Actions per Commit-SHA): Docker 29.8.1 mit containerd-Image-Speicher, syft 1.55.0, trivy 0.76.1, cosign 3.1.4, crane 0.22.1, slsa-github-generator 2.1.0. Vor dem Bauen prüft `security/verify-base-image.sh` die Basis-Images (siehe [Basis-Images prüfen](#basis-images-prüfen)). Jeder Lauf baut den ganzen Stammbaum neu. Die Images bekommen dabei neue Digests, weil das Label `revision` den Commit enthält.
 
 ### Befunde bewerten (vex.json)
 

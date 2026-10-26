@@ -3,6 +3,7 @@
 #   make build IMAGE=<name>   Image für alle Plattformen aus image.yaml bauen
 #   make test IMAGE=<name>    bauen und testen
 #   make test-all             alle Images in Stammbaum-Reihenfolge bauen und testen
+#   make repro IMAGE=<name>   zwei Builds ohne Cache vergleichen (gleiche diff_ids, gleicher Inhalt)
 #   make scan IMAGE=<name>    SBOM (syft) und CVE-Scan (trivy + vex.json) für gebaute Images
 #   make list                 Images in Stammbaum-Reihenfolge anzeigen
 
@@ -10,7 +11,7 @@ SHELL := /bin/bash
 IMAGE ?=
 IMAGES := $(shell shared/scripts/image-meta.sh order)
 
-.PHONY: build test test-all scan list require-image
+.PHONY: build test test-all repro scan list require-image
 
 build: require-image
 	shared/scripts/build-image.sh $(IMAGE)
@@ -20,6 +21,9 @@ test: build
 
 test-all:
 	@set -e; for img in $(IMAGES); do $(MAKE) --no-print-directory test IMAGE=$$img; done
+
+repro: require-image
+	shared/tests/repro.sh $(IMAGE)
 
 scan: require-image
 	ci/sbom-scan.sh $(IMAGE)

@@ -51,13 +51,15 @@ ENTRYPOINT ["/usr/local/bin/node", "--use-openssl-ca"]
 
 ARG VERSION
 ARG REVISION
-ARG PARENT_IMAGE
+ARG PARENT_NAME
+ARG PARENT_DIGEST
 LABEL org.opencontainers.image.title="node" \
 	org.opencontainers.image.description="base + Node.js ${VERSION} (Debian 13.7)" \
 	org.opencontainers.image.version="${VERSION}" \
 	org.opencontainers.image.revision="${REVISION}" \
 	org.opencontainers.image.licenses="MIT AND GPL-3.0-or-later WITH GCC-exception-3.1 AND LGPL-2.1-or-later AND GPL-2.0-or-later AND Apache-2.0 AND BSD-3-Clause AND Zlib AND MPL-2.0 AND LicenseRef-public-domain" \
-	org.opencontainers.image.base.name="${PARENT_IMAGE}"
+	org.opencontainers.image.base.name="${PARENT_NAME}" \
+	org.opencontainers.image.base.digest="${PARENT_DIGEST}"
 
 # -debug: zusätzlich busybox unter /busybox, nur für die lokale Fehlersuche.
 FROM runtime AS debug

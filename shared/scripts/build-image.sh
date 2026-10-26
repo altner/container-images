@@ -5,6 +5,8 @@
 #
 # Aufruf: build-image.sh <name>
 # Umgebung: REGISTRY, PLATFORMS, SOURCE_DATE_EPOCH, REVISION überschreiben die Vorgaben.
+#   OUTPUT_DIR=<dir>  statt in den Image-Speicher zu laden: ohne Cache bauen und als
+#                     OCI-Archiv <dir>/<name>[-debug].tar ablegen (für make repro).
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -20,9 +22,14 @@ if [ -z "${REVISION:-}" ]; then
 fi
 export SOURCE_DATE_EPOCH
 
+# Eltern-Image per Digest des lokal gebauten Images: Bei einem Tag holt BuildKit das
+# Image aus der Registry, sobald es dort existiert, und nicht das frisch gebaute.
 parent=$(meta "$name" parent)
-parent_arg=""
-[ "$parent" = scratch ] || parent_arg="PARENT_IMAGE=$REGISTRY/$parent:$(meta "$parent" tags | head -n1)"
+parent_ref=""
+if [ "$parent" != scratch ]; then
+	parent_ref="$REGISTRY/$parent:$(meta "$parent" tags | head -n1)"
+	parent_ref="$parent_ref@$(docker image inspect --format '{{.Id}}' "$parent_ref")"
+fi
 
 build() {
 	target=$1
@@ -31,7 +38,17 @@ build() {
 	for tag in $(meta "$name" tags); do
 		set -- "$@" --tag "$REGISTRY/$name:$tag$suffix"
 	done
-	[ -z "$parent_arg" ] || set -- "$@" --build-arg "$parent_arg"
+	[ -z "$parent_ref" ] || set -- "$@" --build-arg "PARENT_IMAGE=$parent_ref" \
+		--build-arg "PARENT_NAME=${parent_ref%@*}" --build-arg "PARENT_DIGEST=${parent_ref##*@}"
+	# BuildKit bildet den Cache-Schlüssel von COPY aus dem Dateiinhalt ohne Zeitstempel;
+	# aus dem Cache käme die Schicht mit den Zeitstempeln eines älteren Builds. Die
+	# Stages runtime und debug sind billig und werden deshalb immer neu gebaut.
+	set -- "$@" --no-cache-filter runtime,debug
+	if [ -n "${OUTPUT_DIR:-}" ]; then
+		set -- "$@" --no-cache --output "type=oci,dest=$OUTPUT_DIR/$name$suffix.tar"
+	else
+		set -- "$@" --load
+	fi
 
 	echo "==> build $name$suffix ($PLATFORMS) revision=$REVISION epoch=$SOURCE_DATE_EPOCH"
 	docker buildx build \
@@ -42,7 +59,6 @@ build() {
 		--build-arg VERSION="$(meta "$name" version)" \
 		--build-arg REVISION="$REVISION" \
 		--provenance=false \
-		--load \
 		"$@" \
 		--file "$root/images/$name/Containerfile" \
 		"$root/images/$name"

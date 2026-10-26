@@ -1,5 +1,10 @@
 # Changelog node
 
+## 24.22.1 – 2026-10-26 (Nachtrag, Build-Korrektur)
+
+- Behoben: Die CI hat dieses Image bisher auf dem Eltern-Image aus der Registry gebaut statt auf dem im selben Lauf frisch gebauten, weil BuildKit `FROM <name>:<tag>` aus der Registry auflöst, sobald es dort existiert. Betroffen waren die Veröffentlichungen der Commits `d485d40`, `6141d4f` und `58c2f24`: Ihr Eltern-Image war jeweils das des vorigen Laufs. Es unterschied sich vom frischen nur in Zeitstempeln und Labels, nicht im Inhalt. Das Eltern-Image wird jetzt per Digest des lokal gebauten Images übergeben.
+- Neu: Label `org.opencontainers.image.base.digest`; `org.opencontainers.image.base.name` enthält nur noch Name und Tag.
+
 ## 24.22.1 – 2026-10-26
 
 Erste Version, mit `-debug`-Variante.

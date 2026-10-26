@@ -54,7 +54,8 @@ def ok(msg):
 # --- Image lesen -----------------------------------------------------------------------
 
 
-def load_image(path, platform):
+def open_image(path, platform):
+    """(manifest_digest, manifest, config, blob) für eine Plattform eines OCI-Archivs."""
     outer = tarfile.open(path)
 
     def blob(digest):
@@ -78,13 +79,18 @@ def load_image(path, platform):
             elif "layers" in child:
                 config = json.loads(blob(child["config"]["digest"]))
                 if (config.get("os"), config.get("architecture")) == want:
-                    return child, config
+                    return desc["digest"], child, config
         return None
 
     found = find(json.loads(outer.extractfile("index.json").read()))
     if not found:
         sys.exit(f"FEHLER kein Manifest für {platform} in {path}")
-    manifest, config = found
+    digest, manifest, config = found
+    return digest, manifest, config, blob
+
+
+def load_image(path, platform):
+    _, manifest, config, blob = open_image(path, platform)
     layers = [tarfile.open(fileobj=io.BytesIO(blob(l["digest"])), mode="r:*") for l in manifest["layers"]]
     return config, layers
 

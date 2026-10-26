@@ -1,5 +1,9 @@
 # Changelog static
 
+## 13.7 – 2026-10-26 (Nachtrag)
+
+- Label `org.opencontainers.image.licenses` nennt zusätzlich `Apache-2.0` für die eigenen Dateien (`/etc/passwd`, `/etc/group`). Inhalt unverändert.
+
 ## 13.7 – 2026-10-26
 
 Erste Version, mit `-debug`-Variante.

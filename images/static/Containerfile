@@ -48,7 +48,7 @@ LABEL org.opencontainers.image.title="static" \
 	org.opencontainers.image.source="https://github.com/altner/container-images" \
 	org.opencontainers.image.version="${VERSION}" \
 	org.opencontainers.image.revision="${REVISION}" \
-	org.opencontainers.image.licenses="MPL-2.0 AND GPL-2.0-or-later" \
+	org.opencontainers.image.licenses="Apache-2.0 AND MPL-2.0 AND GPL-2.0-or-later" \
 	org.opencontainers.image.base.name="scratch"
 
 # -debug: zusätzlich busybox unter /busybox, nur für die lokale Fehlersuche.

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Beispiel-Webapp für das Image node der Image-Fabrik",
   "main": "app.js",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "engines": {
     "node": "24.x"
   },

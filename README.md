@@ -230,3 +230,13 @@ amd64 läuft auf dem Mac emuliert. Nachweis, dass beide Architekturen laufen und
 ```bash
 for p in linux/arm64 linux/amd64; do docker run --rm --platform $p debian:stable-slim sh -c 'echo "$(uname -m) $(cat /etc/debian_version)"'; done
 ```
+
+## Lizenz
+
+Die eigenen Dateien dieses Repositorys stehen unter der [Apache License 2.0](LICENSE): Skripte, Containerfiles, Tests, Beispiele und `shared/rootfs`.
+
+Die Images enthalten zusätzlich Software unter eigenen Lizenzen, etwa glibc, OpenSSL, die CA-Zertifikate, tzdata, Node.js und busybox. Deren Lizenztexte liegen im Image unter `/usr/share/doc/<paket>/copyright` bzw. `/usr/local/share/doc/node/LICENSE`. Das Label `org.opencontainers.image.licenses` jedes Images fasst alle enthaltenen Lizenzen als SPDX-Ausdruck zusammen:
+
+```bash
+crane config ghcr.io/altner/images/node:24.22.1 | jq -r '.config.Labels["org.opencontainers.image.licenses"]'
+```

@@ -59,7 +59,7 @@ jobs:
       - uses: docker/setup-docker-action@7ec28a010822b4626af4874f9448a4b05ac6f3e5 # v5.6.0
         with:
           # renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-(?<version>v.+)$
-          version: v29.8.1
+          version: v29.9.2
           set-host: true
           daemon-config: |
             { "features": { "containerd-snapshotter": true } }

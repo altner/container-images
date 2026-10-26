@@ -88,6 +88,8 @@ tar -xOf static.tar index.json | jq -r '.manifests[0].digest'; crane digest ghcr
 
 Beide Digests sind gleich. Danach `git worktree remove ../fabrik-repro`.
 
+Für `base` und `node` muss das veröffentlichte Eltern-Image lokal liegen, für beide Plattformen (`docker pull --platform linux/amd64 …` und `--platform linux/arm64`). Dann ist der Ablauf derselbe. Für Commit `b0200e9` ergab das auf dem Mac für alle sechs veröffentlichten Images (static, base, node, jeweils mit `-debug`) dieselben Digests wie in der Registry.
+
 Woran das hängt:
 
 - Basis-Images und Dockerfile-Frontend sind per Digest gepinnt, Debian-Pakete per Version aus dem Snapshot des Builder-Images.

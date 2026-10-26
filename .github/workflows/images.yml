@@ -9,7 +9,21 @@ name: images
 on:
   push:
     branches: [main]
+    paths:
+      - images/**
+      - shared/**
+      - examples/**
+      - ci/**
+      - .github/workflows/images.yml
+      - Makefile
   pull_request:
+    paths:
+      - images/**
+      - shared/**
+      - examples/**
+      - ci/**
+      - .github/workflows/images.yml
+      - Makefile
   workflow_dispatch:
 
 permissions: {}

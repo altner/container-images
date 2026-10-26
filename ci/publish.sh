@@ -10,15 +10,16 @@
 set -euo pipefail
 . "$(dirname "$0")/../shared/tests/lib.sh"
 
-# ghcr.io bricht Pushes gelegentlich ab; gleiche Inhalte erneut zu pushen ist harmlos.
-push_with_retry() {
-	local ref=$1 attempt
+# ghcr.io und der OIDC-Token-Dienst von GitHub antworten gelegentlich mit Fehlern
+# (z. B. 504); Push, Signatur und Attestierung zu wiederholen ist harmlos.
+retry() {
+	local attempt
 	for attempt in 1 2 3; do
-		echo "==> push $ref (Versuch $attempt)" >&2
-		docker push --quiet "$ref" >&2 && return 0
+		"$@" >&2 && return 0
+		echo "    Versuch $attempt fehlgeschlagen: $*" >&2
 		sleep $((attempt * 15))
 	done
-	echo "FEHLER push $ref nach 3 Versuchen" >&2
+	echo "FEHLER nach 3 Versuchen: $*" >&2
 	return 1
 }
 
@@ -32,7 +33,8 @@ for variant in "${variants[@]}"; do
 	# Gepusht wird genau das getestete Image: der Image-Index im lokalen Speicher.
 	digest=$(docker image inspect --format '{{.Id}}' "$(image_ref "$name")$variant")
 	for tag in $(meta "$name" tags); do
-		push_with_retry "$repo:$tag$variant"
+		echo "==> push $repo:$tag$variant" >&2
+		retry docker push --quiet "$repo:$tag$variant"
 	done
 	remote=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$repo:$(meta "$name" tags | head -n1)$variant" | jq -r .digest)
 	if [ "$remote" != "$digest" ]; then
@@ -41,15 +43,15 @@ for variant in "${variants[@]}"; do
 	fi
 
 	echo "==> cosign sign $repo@$digest (Index und alle Plattformen)" >&2
-	cosign sign --yes --recursive "$repo@$digest" >&2
+	retry cosign sign --yes --recursive "$repo@$digest"
 
 	for platform in $(meta "$name" platforms | tr ',' ' '); do
 		arch=${platform#*/}
 		pdigest=$(docker buildx imagetools inspect --raw "$repo@$digest" |
 			jq -r --arg a "$arch" '.manifests[] | select(.platform.architecture == $a) | .digest')
 		echo "==> cosign attest SBOM, VEX $repo@$pdigest ($platform)" >&2
-		cosign attest --yes --type cyclonedx --predicate "$dir/$arch.cdx.json" "$repo@$pdigest" >&2
-		cosign attest --yes --type https://cyclonedx.org/vex --predicate "$dir/$arch.vex.json" "$repo@$pdigest" >&2
+		retry cosign attest --yes --type cyclonedx --predicate "$dir/$arch.cdx.json" "$repo@$pdigest"
+		retry cosign attest --yes --type https://cyclonedx.org/vex --predicate "$dir/$arch.vex.json" "$repo@$pdigest"
 	done
 
 	jq -cn --arg image "$repo" --arg digest "$digest" '{image: $image, digest: $digest}'

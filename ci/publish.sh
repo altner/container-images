@@ -10,6 +10,18 @@
 set -euo pipefail
 . "$(dirname "$0")/../shared/tests/lib.sh"
 
+# ghcr.io bricht Pushes gelegentlich ab; gleiche Inhalte erneut zu pushen ist harmlos.
+push_with_retry() {
+	local ref=$1 attempt
+	for attempt in 1 2 3; do
+		echo "==> push $ref (Versuch $attempt)" >&2
+		docker push --quiet "$ref" >&2 && return 0
+		sleep $((attempt * 15))
+	done
+	echo "FEHLER push $ref nach 3 Versuchen" >&2
+	return 1
+}
+
 name=$1
 repo="$REGISTRY/$name"
 variants=("")
@@ -20,8 +32,7 @@ for variant in "${variants[@]}"; do
 	# Gepusht wird genau das getestete Image: der Image-Index im lokalen Speicher.
 	digest=$(docker image inspect --format '{{.Id}}' "$(image_ref "$name")$variant")
 	for tag in $(meta "$name" tags); do
-		echo "==> push $repo:$tag$variant" >&2
-		docker push --quiet "$repo:$tag$variant" >&2
+		push_with_retry "$repo:$tag$variant"
 	done
 	remote=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$repo:$(meta "$name" tags | head -n1)$variant" | jq -r .digest)
 	if [ "$remote" != "$digest" ]; then

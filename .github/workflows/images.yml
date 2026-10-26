@@ -123,6 +123,9 @@ jobs:
             tail -n 60 publish.log 2>/dev/null || echo '(kein Protokoll)'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          # Annotations sind auch ohne Anmeldung über die Checks-API lesbar.
+          msg=$(tail -n 25 publish.log 2>/dev/null | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=publish::${msg:-kein Protokoll}"
 
       - name: Artefakte
         if: always()

@@ -303,8 +303,8 @@ Entwicklungsrechner: MacBook mit Apple Silicon (arm64), macOS 27.0.1.
 
 | Werkzeug | Version |
 |---|---|
-| Docker Desktop (Client/Engine) | 29.8.1 |
-| docker buildx | 0.37.1 (BuildKit 0.33.0) |
+| Docker Desktop (Client/Engine) | 29.9.2 |
+| docker buildx | 0.38.1 (BuildKit 0.34.0) |
 | git | 2.55.0 |
 | GNU Make | 3.81 |
 | bash | 3.2.57 (macOS); die Skripte sind darauf abgestimmt |

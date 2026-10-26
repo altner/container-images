@@ -207,7 +207,7 @@ Neue Versionen von `debian` und `node` schlägt Renovate bewusst nicht vor. Sie 
 
 Lokal lassen sich SBOM und Scan mit `make scan IMAGE=<name>` nachvollziehen.
 
-Werkzeuge in der CI, gepinnt im Workflow (Actions per Commit-SHA): Docker 29.8.1 mit containerd-Image-Speicher, syft 1.55.0, trivy 0.76.1, cosign 3.1.4, crane 0.22.1, slsa-github-generator 2.1.0. Vor dem Bauen prüft `security/verify-base-image.sh` die Basis-Images (siehe [Basis-Images prüfen](#basis-images-prüfen)). Jeder Lauf baut den ganzen Stammbaum neu. Die Images bekommen dabei neue Digests, weil das Label `revision` den Commit enthält.
+Werkzeuge in der CI, gepinnt im Workflow (Actions per Commit-SHA): Runner Ubuntu 26.04, Docker 29.9.2 mit containerd-Image-Speicher, syft 1.55.0, trivy 0.76.1, cosign 3.1.4, crane 0.22.1, slsa-github-generator 2.1.0. Vor dem Bauen prüft `security/verify-base-image.sh` die Basis-Images (siehe [Basis-Images prüfen](#basis-images-prüfen)). Jeder Lauf baut den ganzen Stammbaum neu. Die Images bekommen dabei neue Digests, weil das Label `revision` den Commit enthält.
 
 ### Befunde bewerten (vex.json)
 

@@ -42,6 +42,16 @@
       "enabled": false
     },
     {
+      "description": "Die Python-Version (requires-python) gibt das Debian-Paket im Image python vor; Wechsel über das Wartungs-Issue.",
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchDepTypes": [
+        "requires-python"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Gleiches Basis-Image in allen Containerfiles in einem PR aktualisieren.",
       "matchDatasources": [
         "docker"

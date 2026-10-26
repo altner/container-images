@@ -106,12 +106,22 @@ jobs:
         if: env.PUBLISH == 'true'
         run: |
           for img in $(make --no-print-directory list); do
-            ci/publish.sh "$img" >> images.jsonl
+            ci/publish.sh "$img" >> images.jsonl 2> >(tee -a publish.log >&2)
           done
           echo "images=$(jq -cs . images.jsonl)" >> "$GITHUB_OUTPUT"
           {
             echo '## Veröffentlicht'
             jq -r '"- `\(.image)@\(.digest)`"' images.jsonl
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish-Protokoll
+        if: failure() && env.PUBLISH == 'true'
+        run: |
+          {
+            echo '## Veröffentlichen fehlgeschlagen'
+            echo '```'
+            tail -n 60 publish.log 2>/dev/null || echo '(kein Protokoll)'
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Artefakte

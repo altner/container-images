@@ -34,6 +34,32 @@ Registry-Pfad: `ghcr.io/altner/images/<name>`
 
 Die Tags errechnet `shared/scripts/image-meta.sh <name> tags` aus `images/<name>/image.yaml`.
 
+## Eine App umstellen
+
+Für eine bestehende Go- oder Node-App mit Containerfile:
+
+1. **Image wählen und per Digest pinnen.** Go mit `CGO_ENABLED=0` nimmt `static`, Node-Apps nehmen `node`:
+   ```bash
+   crane digest ghcr.io/altner/images/node:24.22.1
+   ```
+   Im Containerfile wird daraus `FROM ghcr.io/altner/images/node:24.22.1@sha256:<digest>`.
+2. **Build-Stage auf dieselbe Debian-Version bringen** (13.7, trixie), damit native Teile zur glibc passen:
+   - Go: `golang:<version>-trixie`
+   - Node: `node:24.22.1-trixie-slim`, darin `npm ci --omit=dev`, dann das ganze App-Verzeichnis samt `node_modules` kopieren
+3. **Laufzeit anpassen.** Es gibt keine Shell:
+   - `CMD`, `ENTRYPOINT` und `HEALTHCHECK` in der Exec-Form (`["…"]`) schreiben.
+   - Bei `node` enthält `CMD` nur das Skript (`["/app/app.js"]`).
+   - Den Healthcheck baut die App selbst ein, z. B. als Unterbefehl `healthcheck`.
+4. **SIGTERM behandeln:** Die App läuft als PID 1 und muss sich bei SIGTERM selbst sauber beenden.
+5. **Schreibzugriffe klären:** Die App läuft als UID 65534 und nur lesend. Temporäre Dateien gehen nach `--tmpfs /tmp`, Daten in ein Volume.
+6. **Starten:**
+   ```bash
+   docker run --read-only --cap-drop ALL --security-opt no-new-privileges -p 8080:8080 <app-image>
+   ```
+7. **Optional Herkunft prüfen:** Ein Schritt `cosign verify` (siehe [Image verifizieren](#image-verifizieren)) vor dem Deploy. Oder `security/verify-base-image.sh` mit `base-image-trust.json` übernehmen; der Eintrag `ghcr.io/altner/images/*` ist schon da.
+
+Vollständige Vorlagen sind [examples/go](examples/go) und [examples/node](examples/node). Zur Fehlersuche das `-debug`-Tag nehmen und mit `--entrypoint sh` starten.
+
 ## Bauen und testen
 
 ```bash

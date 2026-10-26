@@ -10,6 +10,7 @@
   "labels": [
     "abhaengigkeiten"
   ],
+  "dependencyDashboardAutoclose": true,
   "ignorePaths": [
     "**/node_modules/**"
   ],

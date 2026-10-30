@@ -9,6 +9,7 @@
 #   - neue Node.js-Version in der genutzten LTS-Linie (mit Sicherheits-Kennzeichen),
 #     neue LTS-Linie, nahendes Ende der genutzten Linie
 #   - neue Paketversion von python3.13 in Debian (stable, security), Ende von Python 3.13
+#   - neue Paketversion von openjdk-21 in Debian (stable, security), Ende von Java 21
 #   - neue CVEs: veröffentlichte Images erneut mit trivy scannen, vex.json anwenden
 #   - Basis-Images: security/verify-base-image.sh (fehlende oder neue Nachweise)
 set -euo pipefail
@@ -21,6 +22,24 @@ mkdir -p "$work"
 
 log() { echo "$*" >&2; }
 finding() { jq -cn --arg title "$1" --arg body "$2" '{title: $title, body: $body}'; }
+
+# Version eines Binärpakets in Debian stable (ftp-master-API, madison).
+debian_stable_version() {
+	curl -fsS "https://api.ftp-master.debian.org/madison?package=$1&s=stable&text=on" |
+		awk -F'|' 'NR == 1 { gsub(/ /, "", $2); print $2 }'
+}
+
+# Version eines Binärpakets in trixie-security; das Sicherheits-Archiv kennt die
+# ftp-master-API nicht, deshalb wird dessen Paketliste direkt gelesen.
+debian_security_version() {
+	python3 -I -c '
+import lzma, sys, urllib.request
+url = "https://security.debian.org/debian-security/dists/trixie-security/main/binary-amd64/Packages.xz"
+for block in lzma.decompress(urllib.request.urlopen(url, timeout=30).read()).decode().split("\n\n"):
+    if block.startswith(f"Package: {sys.argv[1]}\n"):
+        print(next(l[9:] for l in block.splitlines() if l.startswith("Version: ")))
+' "$1"
+}
 
 # --- Debian ---------------------------------------------------------------------------
 release=$(curl -fsS https://deb.debian.org/debian/dists/stable/Release)
@@ -83,16 +102,8 @@ fi
 # --- Python (aus Debian) --------------------------------------------------------------
 if [ -d "$ROOT/images/python" ]; then
 	pinned=$(sed -n 's/.*python3\.13-minimal=\([^ \\]*\).*/\1/p' "$ROOT/images/python/Containerfile" | head -n1)
-	in_stable=$(curl -fsS 'https://api.ftp-master.debian.org/madison?package=python3.13&s=stable&text=on' |
-		awk -F'|' 'NR == 1 { gsub(/ /, "", $2); print $2 }')
-	# Das Sicherheits-Archiv kennt die ftp-master-API nicht; dessen Paketliste direkt lesen.
-	in_security=$(python3 -I -c '
-import lzma, urllib.request
-url = "https://security.debian.org/debian-security/dists/trixie-security/main/binary-amd64/Packages.xz"
-for block in lzma.decompress(urllib.request.urlopen(url, timeout=30).read()).decode().split("\n\n"):
-    if block.startswith("Package: python3.13-minimal\n"):
-        print(next(l[9:] for l in block.splitlines() if l.startswith("Version: ")))
-')
+	in_stable=$(debian_stable_version python3.13)
+	in_security=$(debian_security_version python3.13-minimal)
 	newest=$(printf '%s\n' "$pinned" "$in_stable" $in_security | sort -V | tail -n1)
 	eol=$(curl -fsS https://endoflife.date/api/python/3.13.json)
 	log "Python: Image $pinned, Debian stable $in_stable, security ${in_security:-–}"
@@ -107,6 +118,28 @@ Upstream ist bei $(jq -r .latest <<<"$eol"); das Image folgt bewusst Debian.
 	py_end=$(jq -r .eol <<<"$eol")
 	if [ "$(date -u +%s)" -gt $(($(date -u -d "$py_end" +%s 2>/dev/null || date -u -j -f %Y-%m-%d "$py_end" +%s) - 90 * 86400)) ]; then
 		finding "Python 3.13 erreicht am $py_end das Ende" "Python 3.13 wird ab $py_end nicht mehr gepflegt. Wechsel auf eine neuere Version planen (mit der nächsten Debian-Version)."
+	fi
+fi
+
+# --- Java (aus Debian) ----------------------------------------------------------------
+if [ -d "$ROOT/images/java" ]; then
+	pinned=$(sed -n 's/.*openjdk-21-jre-headless=\([^ \\]*\).*/\1/p' "$ROOT/images/java/Containerfile" | head -n1)
+	in_stable=$(debian_stable_version openjdk-21-jre-headless)
+	in_security=$(debian_security_version openjdk-21-jre-headless)
+	newest=$(printf '%s\n' "$pinned" "$in_stable" $in_security | sort -V | tail -n1)
+	eol=$(curl -fsS https://endoflife.date/api/eclipse-temurin/21.json)
+	log "Java: Image $pinned, Debian stable $in_stable, security ${in_security:-–}"
+	if [ "$newest" != "$pinned" ]; then
+		finding "OpenJDK 21 aus Debian: $newest verfügbar (Image: $pinned)" \
+"Debian hat eine neue Paketversion von openjdk-21: $newest (stable: $in_stable, security: ${in_security:-keine}). Das Image nutzt $pinned.
+
+OpenJDK-Updates erscheinen vierteljährlich (Critical Patch Updates).
+
+- Zu tun: Builder-Digest bzw. Snapshot und die Version in \`images/java/Containerfile\`, \`images/java/image.yaml\` (\`version\`), \`examples/java/Containerfile\` und CHANGELOG anheben, dann \`make test IMAGE=java\`. Mit \`vex.json\` abgleichen."
+	fi
+	java_end=$(jq -r '.eol' <<<"$eol")
+	if [ "$(date -u +%s)" -gt $(($(date -u -d "$java_end" +%s 2>/dev/null || date -u -j -f %Y-%m-%d "$java_end" +%s) - 90 * 86400)) ]; then
+		finding "Java 21 erreicht am $java_end das Ende" "Für Java 21 gibt es ab $java_end keine Updates mehr (laut endoflife.date, Eclipse Temurin). Wechsel auf eine neuere LTS-Version planen."
 	fi
 fi
 

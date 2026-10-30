@@ -1,6 +1,6 @@
 # Image-Fabrik
 
-Eigene, minimale Basis-Images für Webapps in Go, Node und Python. Die Apps liegen in eigenen Repositorys und beziehen die Images nur per `FROM`.
+Eigene, minimale Basis-Images für Webapps in Go, Node, Python und Java. Die Apps liegen in eigenen Repositorys und beziehen die Images nur per `FROM`.
 
 ## Stammbaum
 
@@ -8,7 +8,8 @@ Eigene, minimale Basis-Images für Webapps in Go, Node und Python. Die Apps lieg
 static        scratch + /etc/passwd, /etc/group, CA-Bundle   → Go, Rust (statisch)
   └─ base     + glibc, libssl, tzdata                         → dynamisch gelinkte Programme
        ├─ node    + Node.js (LTS)                             → Node-Webapps
-       └─ python  + Python-Interpreter (eine Version)         → Python-Webapps
+       ├─ python  + Python-Interpreter (eine Version)         → Python-Webapps
+       └─ java    + OpenJDK-JRE headless (eine LTS-Version)   → Java-Webapps, Fat-JARs
 ```
 
 | Image | Tags | Beschreibung |
@@ -17,6 +18,7 @@ static        scratch + /etc/passwd, /etc/group, CA-Bundle   → Go, Rust (stati
 | [base](images/base) | `13.7`, `13.7-debug` | static + glibc, libssl, tzdata |
 | [node](images/node) | `24.22.1`, `24.22.1-13.7`, jeweils auch `-debug` | base + Node.js 24 LTS |
 | [python](images/python) | `3.13.5`, `3.13.5-13.7`, jeweils auch `-debug` | base + Python 3.13 aus Debian |
+| [java](images/java) | `21.0.13`, `21.0.13-13.7`, jeweils auch `-debug` | base + OpenJDK 21 (JRE headless) aus Debian |
 
 Alle Images sind öffentlich unter `ghcr.io/altner/images/<name>`, signiert und mit SBOM, VEX und SLSA-Provenance versehen (siehe [Image verifizieren](#image-verifizieren)).
 
@@ -29,7 +31,7 @@ Registry-Pfad: `ghcr.io/altner/images/<name>`
 | Image | Tags |
 |---|---|
 | `static`, `base` | `<debian-version>`, z. B. `static:13.7` |
-| `node`, `python` | `<laufzeit-version>` und `<laufzeit-version>-<debian-version>` |
+| `node`, `python`, `java` | `<laufzeit-version>` und `<laufzeit-version>-<debian-version>` |
 | Debug-Varianten | gleiche Tags mit Suffix `-debug` |
 
 Die Tags errechnet `shared/scripts/image-meta.sh <name> tags` aus `images/<name>/image.yaml`.
@@ -38,7 +40,7 @@ Die Tags errechnet `shared/scripts/image-meta.sh <name> tags` aus `images/<name>
 
 Für eine bestehende Go- oder Node-App mit Containerfile:
 
-1. **Image wählen und per Digest pinnen.** Go mit `CGO_ENABLED=0` nimmt `static`, Node-Apps nehmen `node`, Python-Apps `python`:
+1. **Image wählen und per Digest pinnen.** Go mit `CGO_ENABLED=0` nimmt `static`, Node-Apps nehmen `node`, Python-Apps `python`, Java-Apps `java`:
    ```bash
    crane digest ghcr.io/altner/images/node:24.22.1
    ```
@@ -47,9 +49,11 @@ Für eine bestehende Go- oder Node-App mit Containerfile:
    - Go: `golang:<version>-trixie`
    - Node: `node:24.22.1-trixie-slim`, darin `npm ci --omit=dev`, dann das ganze App-Verzeichnis samt `node_modules` kopieren
    - Python: `debian:13.7-slim` mit dem Python-Paket derselben Version wie im Image, darin das venv mit `uv sync` (siehe [images/python](images/python)), dann das ganze venv kopieren
+   - Java: das JAR (bei Fat-JARs wie GraphHopper das fertige Release) nach `/app` kopieren. Selbst gebaut wird mit einem JDK 21; bei nativen Teilen (JNI) auf Debian 13.7, etwa mit `openjdk-21-jdk-headless` derselben Version (siehe [images/java](images/java))
 3. **Laufzeit anpassen.** Es gibt keine Shell:
    - `CMD`, `ENTRYPOINT` und `HEALTHCHECK` in der Exec-Form (`["…"]`) schreiben.
    - Bei `node` enthält `CMD` nur das Skript (`["/app/app.js"]`).
+   - Bei `java` nennt `CMD` die JVM selbst (`["/usr/bin/java", "-jar", "/app/app.jar"]`).
    - Den Healthcheck baut die App selbst ein, z. B. als Unterbefehl `healthcheck`.
 4. **SIGTERM behandeln:** Die App läuft als PID 1 und muss sich bei SIGTERM selbst sauber beenden.
 5. **Schreibzugriffe klären:** Die App läuft als UID 65534 und nur lesend. Temporäre Dateien gehen nach `--tmpfs /tmp`, Daten in ein Volume.
@@ -59,7 +63,7 @@ Für eine bestehende Go- oder Node-App mit Containerfile:
    ```
 7. **Optional Herkunft prüfen:** Ein Schritt `cosign verify` (siehe [Image verifizieren](#image-verifizieren)) vor dem Deploy. Oder `security/verify-base-image.sh` mit `base-image-trust.json` übernehmen; der Eintrag `ghcr.io/altner/images/*` ist schon da.
 
-Vollständige Vorlagen sind [examples/go](examples/go), [examples/node](examples/node) und [examples/python](examples/python). Zur Fehlersuche das `-debug`-Tag nehmen und mit `--entrypoint sh` starten.
+Vollständige Vorlagen sind [examples/go](examples/go), [examples/node](examples/node), [examples/python](examples/python) und [examples/java](examples/java). Zur Fehlersuche das `-debug`-Tag nehmen und mit `--entrypoint sh` starten.
 
 ## Bauen und testen
 
@@ -90,7 +94,7 @@ Die gemeinsame Bibliothek in [shared/tests](shared/tests) liest `image.yaml` und
 
 - **Inhalt:** Das Dateisystem entspricht exakt `expected-files.txt`, bei `-debug` zusätzlich [shared/tests/expected-debug.txt](shared/tests/expected-debug.txt). Es gibt keine Shell (außer in `-debug`), keine setuid/setgid-Bits, alles gehört `0:0` und ist nicht schreibbar. Es gibt keine hängenden Symlinks, und jedes ELF hat die richtige Architektur.
 - **Konfiguration:** `Config.User` ist `65534:65534`, und die OCI-Labels `source`, `version`, `revision`, `licenses` und `base.name` sind gesetzt.
-- **Bibliotheken:** Jede dynamisch gelinkte Datei wird mit dem Loader des Images (`--list`) aufgelöst; `not found` lässt den Test scheitern.
+- **Bibliotheken:** Jede dynamisch gelinkte Datei wird mit dem Loader des Images (`--list`) aufgelöst; `not found` lässt den Test scheitern. Nennt ein Image in `image.yaml` einen `library_path:`, löst der Loader zusätzlich mit diesem Suchpfad auf (bei `java` für `libjvm.so`, das der Launcher vor den übrigen JVM-Bibliotheken lädt).
 - **Debug:** `/busybox/sh` startet und läuft als `65534:65534`.
 - **Laufzeit:** Die Beispiel-App aus `image.yaml` (`example:`) wird auf dem Image gebaut und mit `--read-only --cap-drop ALL --security-opt no-new-privileges` gestartet. Geprüft werden:
   - Healthcheck und `/healthz`
@@ -102,7 +106,7 @@ Die gemeinsame Bibliothek in [shared/tests](shared/tests) liest `image.yaml` und
 
 ## Reproduzierbarkeit
 
-Gleicher Code ergibt das gleiche Image, Bit für Bit. `make repro IMAGE=<name>` baut ein Image samt `-debug` zweimal ohne Cache als OCI-Archiv und vergleicht pro Plattform die `diff_id`s und jede Datei (Typ, Modus, Eigentümer, Zeitstempel, Symlink-Ziel, SHA-256). Auch Manifest- und Index-Digest stimmen überein. Am 2026-10-26 waren `static`, `base`, `node` und `python` reproduzierbar. Bei `python` gilt das auch für die vorkompilierte Standardbibliothek.
+Gleicher Code ergibt das gleiche Image, Bit für Bit. `make repro IMAGE=<name>` baut ein Image samt `-debug` zweimal ohne Cache als OCI-Archiv und vergleicht pro Plattform die `diff_id`s und jede Datei (Typ, Modus, Eigentümer, Zeitstempel, Symlink-Ziel, SHA-256). Auch Manifest- und Index-Digest stimmen überein. Am 2026-10-26 waren `static`, `base`, `node` und `python` reproduzierbar. Bei `python` gilt das auch für die vorkompilierte Standardbibliothek. Am 2026-10-30 kam `java` dazu, einschließlich des beim Build erzeugten Truststores `cacerts`.
 
 Das gilt auch über Rechner hinweg: Mit gleichem Commit und gleichem Eltern-Image ergibt ein Build auf dem Mac denselben Digest wie die CI auf GitHub. Für `static` (ohne Eltern-Image) lässt sich das direkt nachprüfen. Der Commit kommt aus dem Label des veröffentlichten Images, gebaut wird in einem eigenen Worktree ohne Cache:
 
@@ -119,7 +123,7 @@ Für `base` und `node` muss das veröffentlichte Eltern-Image lokal liegen, für
 
 Woran das hängt:
 
-- Basis-Images und Dockerfile-Frontend sind per Digest gepinnt, Debian-Pakete per Version aus dem Snapshot des Builder-Images.
+- Basis-Images und Dockerfile-Frontend sind per Digest gepinnt, Debian-Pakete per Version aus dem Snapshot des Builder-Images. Braucht ein Image ein Sicherheitsupdate, das noch in keinem Builder-Image steckt, pinnt es mit `DEBIAN_SNAPSHOT` einen späteren Snapshot (derzeit `java`, siehe [shared/scripts/extract-debs.sh](shared/scripts/extract-debs.sh)).
 - Die Node-Binary ist per Prüfsumme gepinnt.
 - Alle Zeitstempel im Inhalt sind `SOURCE_DATE_EPOCH`, also die Zeit des letzten Commits. BuildKit setzt damit auch das Erstelldatum.
 - Das Label `revision` enthält den Commit; ein neuer Commit ergibt deshalb neue Digests bei gleichem Inhalt (gleiche `diff_id`s).
@@ -160,6 +164,7 @@ Außer `uv` ist keines dieser Images signiert. Für `uv` prüft die Regel `githu
 | neue Debian-Point-Release oder neues stable | `deb.debian.org/debian/dists/stable/Release` |
 | neue Node.js-Version der genutzten Linie (mit Sicherheits-Kennzeichen), neue LTS-Linie, Ende der Linie in weniger als 90 Tagen | `nodejs.org/dist/index.json`, `nodejs/Release/schedule.json` |
 | neue Paketversion von `python3.13` in Debian, Ende von Python 3.13 | `api.ftp-master.debian.org` (madison), Paketliste von `trixie-security`, `endoflife.date` |
+| neue Paketversion von `openjdk-21` in Debian, Ende von Java 21 | dto.; das Ende laut `endoflife.date` für Eclipse Temurin 21 |
 | neue CVEs in den veröffentlichten Images (CRITICAL/HIGH, nicht in `vex.json` bewertet) | trivy gegen `ghcr.io` |
 | fehlende oder neue Nachweise der Basis-Images | `security/verify-base-image.sh` |
 
@@ -169,7 +174,7 @@ Lokal ohne Issues:
 ci/check-updates.sh
 ```
 
-Für Python meldet der Check neue Paketversionen von `python3.13` in Debian (stable und security) und das nahende Ende von Python 3.13. Die Upstream-Version nennt er nur zur Information, denn das Image folgt bewusst Debian.
+Für Python meldet der Check neue Paketversionen von `python3.13` in Debian (stable und security) und das nahende Ende von Python 3.13. Die Upstream-Version nennt er nur zur Information, denn das Image folgt bewusst Debian. Für Java meldet er ebenso neue Paketversionen von `openjdk-21-jre-headless` und das nahende Ende von Java 21.
 
 **Renovate** ([renovate.json](renovate.json)) hält aktuell:
 
@@ -298,7 +303,7 @@ Stand: 2026-10-26
 | Registry-Pfad | `ghcr.io/altner/images/<name>`, öffentlich |
 | Produktiv-VPS | Hetzner, x86 (`linux/amd64`) |
 | Gebaute Plattformen | `linux/amd64` und `linux/arm64` |
-| Laufzeiten | Node 24 LTS; Python 3.13 aus Debian (seit 2026-10-26, für soinow-net) |
+| Laufzeiten | Node 24 LTS; Python 3.13 aus Debian (seit 2026-10-26, für soinow-net); Java 21 (OpenJDK, JRE headless) aus Debian (seit 2026-10-30, für Sangkhaya/GraphHopper) |
 | Debian-Version | 13.7 (trixie), aktuelles stable |
 | Debian-Pakete | aus `snapshot.debian.org`, Zeitpunkt aus dem gepinnten Builder-Image |
 

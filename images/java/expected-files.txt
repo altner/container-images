@@ -1,0 +1,103 @@
+# Exakt erlaubter Inhalt von java (Format siehe images/static/expected-files.txt).
+include base
+
+# OpenJDK 21 (JRE headless) aus Debian: nur das Programm java
+d /usr/bin
+l /usr/bin/java
+d /usr/lib/jvm
+l /usr/lib/jvm/default-java
+d /usr/lib/jvm/java-21-openjdk-*
+d /usr/lib/jvm/java-21-openjdk-*/bin
+f /usr/lib/jvm/java-21-openjdk-*/bin/java
+f /usr/lib/jvm/java-21-openjdk-*/release
+
+# Konfiguration: Symlinks unter conf/ und lib/ zeigen wie bei Debian nach /etc/java-21-openjdk
+d /usr/lib/jvm/java-21-openjdk-*/conf
+d /usr/lib/jvm/java-21-openjdk-*/conf/*
+l /usr/lib/jvm/java-21-openjdk-*/conf/*
+d /etc/java-21-openjdk
+d /etc/java-21-openjdk/*
+f /etc/java-21-openjdk/*
+
+# Lizenztexte der Module
+d /usr/lib/jvm/java-21-openjdk-*/legal
+d /usr/lib/jvm/java-21-openjdk-*/legal/*
+f /usr/lib/jvm/java-21-openjdk-*/legal/*
+l /usr/lib/jvm/java-21-openjdk-*/legal/*
+
+# Klassen (modules), CDS-Archive, VM und native Bibliotheken; ohne libfontmanager,
+# libjsound, libj2pcsc, libjavajpeg, liblcms
+d /usr/lib/jvm/java-21-openjdk-*/lib
+d /usr/lib/jvm/java-21-openjdk-*/lib/jfr
+l /usr/lib/jvm/java-21-openjdk-*/lib/jfr/default.jfc
+l /usr/lib/jvm/java-21-openjdk-*/lib/jfr/profile.jfc
+f /usr/lib/jvm/java-21-openjdk-*/lib/jrt-fs.jar
+f /usr/lib/jvm/java-21-openjdk-*/lib/jspawnhelper
+l /usr/lib/jvm/java-21-openjdk-*/lib/jvm.cfg
+f /usr/lib/jvm/java-21-openjdk-*/lib/modules
+f /usr/lib/jvm/java-21-openjdk-*/lib/tzdb.dat
+f /usr/lib/jvm/java-21-openjdk-*/lib/libattach.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libawt.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libawt_headless.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libdt_socket.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libextnet.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libinstrument.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libj2gss.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libj2pkcs11.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libjaas.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libjava.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libjdwp.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libjimage.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libjli.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libjsig.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libjsvml.so                   @linux/amd64
+f /usr/lib/jvm/java-21-openjdk-*/lib/lible.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libmanagement.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libmanagement_agent.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libmanagement_ext.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libmlib_image.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libnet.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libnio.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libprefs.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/librmi.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libsaproc.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libsctp.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libsyslookup.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libverify.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/libzip.so
+d /usr/lib/jvm/java-21-openjdk-*/lib/server
+f /usr/lib/jvm/java-21-openjdk-*/lib/server/classes.jsa
+f /usr/lib/jvm/java-21-openjdk-*/lib/server/classes_nocoops.jsa
+f /usr/lib/jvm/java-21-openjdk-*/lib/server/libjsig.so
+f /usr/lib/jvm/java-21-openjdk-*/lib/server/libjvm.so
+d /usr/lib/jvm/java-21-openjdk-*/lib/security
+l /usr/lib/jvm/java-21-openjdk-*/lib/security/blocked.certs
+l /usr/lib/jvm/java-21-openjdk-*/lib/security/cacerts
+l /usr/lib/jvm/java-21-openjdk-*/lib/security/default.policy
+l /usr/lib/jvm/java-21-openjdk-*/lib/security/public_suffix_list.dat
+
+# Truststore, beim Build aus /etc/ssl/certs/ca-certificates.crt erzeugt
+d /etc/ssl/certs/java
+f /etc/ssl/certs/java/cacerts
+
+# libstdc++6 für libjvm.so
+l /usr/lib/*-linux-gnu/libstdc++.so.6
+f /usr/lib/*-linux-gnu/libstdc++.so.6.*
+
+# Locale C.utf8 aus libc-bin
+d /usr/lib/locale
+d /usr/lib/locale/C.utf8
+d /usr/lib/locale/C.utf8/LC_MESSAGES
+f /usr/lib/locale/C.utf8/LC_*
+f /usr/lib/locale/C.utf8/LC_MESSAGES/SYS_LC_MESSAGES
+
+# Lizenztexte und Paket-Metadaten
+d /usr/share/doc/libc-bin
+f /usr/share/doc/libc-bin/copyright
+d /usr/share/doc/libstdc++6
+f /usr/share/doc/libstdc++6/copyright
+d /usr/share/doc/openjdk-21-jre-headless
+f /usr/share/doc/openjdk-21-jre-headless/copyright
+f /var/lib/dpkg/status.d/libc-bin
+f /var/lib/dpkg/status.d/libstdc++6
+f /var/lib/dpkg/status.d/openjdk-21-jre-headless

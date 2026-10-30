@@ -5,4 +5,4 @@ debian: "13.7"             # muss DEBIAN_VERSION_FULL in /usr/lib/os-release ent
 parent: static
 platforms: linux/amd64,linux/arm64
 debug: true
-example:                   # keine eigene Beispiel-App; node und python testen darauf
+example:                   # keine eigene Beispiel-App; node, python und java testen darauf

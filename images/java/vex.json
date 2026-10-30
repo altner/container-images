@@ -1,0 +1,29 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:9d258771-fc04-4f2d-8270-65f5a8c2ba49",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "container",
+      "name": "ghcr.io/altner/images/java"
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-114820",
+      "analysis": {
+        "state": "exploitable",
+        "response": [
+          "update"
+        ],
+        "detail": "JSSE vertraut TLS-Zertifikaten unter eMudhra-Zwischenzertifikaten, die OpenJDK inzwischen misstraut (Advisory 2026-10-24); der Truststore des Images enthält die emSign-Wurzeln aus ca-certificates. Betrifft TLS-Verbindungen der App zu Servern mit solchen Zertifikaten. Debian hat am 2026-10-30 den Fix nur in sid (21.0.13.0.3+1-1), nicht in trixie; akzeptiert, bis einer verfügbar ist (dann neu bauen)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/openjdk-21-jre-headless@21.0.13+9-1~deb13u2"
+        }
+      ]
+    }
+  ]
+}

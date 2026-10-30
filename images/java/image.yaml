@@ -1,0 +1,11 @@
+# Flaches Format: ein "schlüssel: wert" pro Zeile (gelesen von shared/scripts/image-meta.sh).
+name: java
+version: "21.0.13"         # OpenJDK 21 aus Debian 13.7 (Paket 21.0.13+9-1~deb13u2)
+debian: "13.7"             # muss DEBIAN_VERSION_FULL in /usr/lib/os-release entsprechen
+parent: base
+platforms: linux/amd64,linux/arm64
+debug: true
+example: java              # Beispiel-App, mit der die Laufzeittests laufen
+# libjvm.so lädt der Launcher, bevor die übrigen JVM-Bibliotheken nachgeladen werden; sie
+# nennen es ohne Pfad. Der Bibliothekstest löst sie deshalb mit diesem Suchpfad auf.
+library_path: /usr/lib/jvm/default-java/lib/server

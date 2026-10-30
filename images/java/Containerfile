@@ -1,0 +1,93 @@
+# syntax=docker/dockerfile:1.28.0@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
+
+# java: base + OpenJDK 21 (JRE headless) aus dem entpackten Debian-Paket. Nur das Programm
+# java, keine Shell. Den Truststore cacerts erzeugt der Build aus dem CA-Bundle des Images.
+ARG PARENT_IMAGE=ghcr.io/altner/images/base:13.7
+
+FROM ${PARENT_IMAGE} AS parent
+
+# Builder auf der Zielplattform: ldd muss libjvm.so der Zielarchitektur auflösen, und das
+# JRE selbst erzeugt den Truststore.
+FROM debian:13.7-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS builder
+ARG SOURCE_DATE_EPOCH
+COPY --from=shared scripts/ /usr/local/lib/fabrik/
+COPY --from=parent /var/lib/dpkg/status.d/ /parent-status/
+COPY --from=parent /etc/ssl/certs/ca-certificates.crt /parent-ca/ca-certificates.crt
+COPY cacerts/CaCerts.java /usr/local/src/CaCerts.java
+# OpenJDK 21.0.13 (Sicherheitsupdate) liegt seit 20261027T195512Z in trixie-security, aber
+# noch in keinem Builder-Image; DEBIAN_SNAPSHOT nimmt diesen Snapshot (siehe extract-debs.sh).
+# libc-bin (gleiche Version wie libc6 in base) nur für die Locale C.utf8.
+ARG DEBIAN_SNAPSHOT=20261027T195512Z
+RUN DEBIAN_SNAPSHOT=$DEBIAN_SNAPSHOT /usr/local/lib/fabrik/extract-debs.sh /stage \
+		libc-bin=2.41-12+deb13u4 \
+		openjdk-21-jre-headless=21.0.13+9-1~deb13u2
+
+# Aus dem Paket nur das JRE unter /usr/lib/jvm und seine Konfiguration unter /etc:
+# ohne die Werkzeuge keytool, rmiregistry, jpackage, ohne jexec und Handbuchseiten;
+# ohne die nativen Bibliotheken, deren Abhängigkeiten base nicht hat: Fonts (freetype,
+# harfbuzz), Sound (ALSA), Smartcards (pcsclite), JPEG (libjpeg) und Farbmanagement (lcms2).
+# libstdc++6 für libjvm.so per ldd; die übrigen .so brauchen nichts, was base nicht hat.
+# /usr/bin/java und /usr/lib/jvm/default-java ersetzen Debians alternatives.
+# Aus libc-bin nur die Locale C.utf8: Ohne sie fällt die JVM trotz LANG=C.UTF-8 für
+# Dateinamen und stdout/stderr auf ASCII zurück (sun.jnu.encoding, stdout.encoding).
+RUN set -eu; \
+	arch=$(dpkg --print-architecture); \
+	src=/stage/openjdk-21-jre-headless; \
+	jvm=usr/lib/jvm/java-21-openjdk-$arch; \
+	mkdir -p /out; \
+	cd /out; \
+	mkdir -p usr/bin usr/lib/jvm usr/lib/locale etc/ssl/certs/java usr/share/doc var/lib/dpkg/status.d; \
+	cp -a "$src/$jvm" usr/lib/jvm/; \
+	cp -a "$src/etc/java-21-openjdk" etc/; \
+	rm -rf "$jvm/docs" "$jvm/man" "$jvm/bin/jpackage" "$jvm/bin/keytool" "$jvm/bin/rmiregistry" \
+		"$jvm/lib/jexec" "$jvm/lib/jar.binfmt" "$jvm/lib/jvm.cfg-default" "$jvm/lib/classlist"; \
+	for so in libfontmanager libjsound libj2pcsc libjavajpeg liblcms; do rm "$jvm/lib/$so.so"; done; \
+	rm "$jvm/lib/psfont.properties.ja" "$jvm/lib/psfontj2d.properties" "$jvm/conf/sound.properties" \
+		etc/java-21-openjdk/psfont.properties.ja etc/java-21-openjdk/psfontj2d.properties \
+		etc/java-21-openjdk/sound.properties; \
+	ln -s "java-21-openjdk-$arch" usr/lib/jvm/default-java; \
+	ln -s "../lib/jvm/java-21-openjdk-$arch/bin/java" usr/bin/java; \
+	/usr/local/lib/fabrik/copy-ldd-deps.sh "/out/$jvm/lib/server/libjvm.so" /out /parent-status \
+		libstdc++6=14.2.0-19; \
+	cp -a /stage/libc-bin/usr/lib/locale/C.utf8 usr/lib/locale/; \
+	for pkg in libc-bin openjdk-21-jre-headless; do \
+		mkdir -p "usr/share/doc/$pkg"; \
+		cp "/stage/$pkg/usr/share/doc/$pkg/copyright" "usr/share/doc/$pkg/copyright"; \
+		cp "/stage/status.d/$pkg" "var/lib/dpkg/status.d/$pkg"; \
+	done; \
+	cp -a etc/java-21-openjdk /etc/; \
+	"/out/$jvm/bin/java" -Xshare:auto /usr/local/src/CaCerts.java \
+		/parent-ca/ca-certificates.crt etc/ssl/certs/java/cacerts; \
+	rm -rf /etc/java-21-openjdk; \
+	chown -R 0:0 /out; \
+	find /out -type d -exec chmod 0755 {} +; \
+	find /out -type f -exec chmod go-w,u-s,g-s {} +; \
+	/usr/local/lib/fabrik/normalize-epoch.sh /out
+
+FROM builder AS debug-builder
+ARG SOURCE_DATE_EPOCH
+RUN /usr/local/lib/fabrik/add-busybox.sh /debug
+
+FROM ${PARENT_IMAGE} AS runtime
+COPY --from=builder /out/ /
+ENV PATH=/usr/bin \
+	JAVA_HOME=/usr/lib/jvm/default-java \
+	LANG=C.UTF-8
+CMD ["/usr/bin/java", "-version"]
+
+ARG VERSION
+ARG REVISION
+ARG PARENT_NAME
+ARG PARENT_DIGEST
+LABEL org.opencontainers.image.title="java" \
+	org.opencontainers.image.description="base + OpenJDK ${VERSION} (JRE headless) aus Debian 13.7" \
+	org.opencontainers.image.version="${VERSION}" \
+	org.opencontainers.image.revision="${REVISION}" \
+	org.opencontainers.image.licenses="GPL-2.0-only WITH Classpath-exception-2.0 AND GPL-2.0-only WITH OpenJDK-assembly-exception-1.0 AND MIT AND LGPL-2.1-only AND ICU AND Unicode-DFS-2016 AND LGPL-2.1-or-later AND GPL-2.0-or-later AND GPL-3.0-or-later WITH GCC-exception-3.1 AND Apache-2.0 AND BSD-3-Clause AND Zlib AND MPL-2.0 AND LicenseRef-public-domain" \
+	org.opencontainers.image.base.name="${PARENT_NAME}" \
+	org.opencontainers.image.base.digest="${PARENT_DIGEST}"
+
+# -debug: zusätzlich busybox unter /busybox, nur für die lokale Fehlersuche.
+FROM runtime AS debug
+COPY --from=debug-builder /debug/ /
+ENV PATH=/usr/bin:/busybox

@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1.28.0@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
+
+# In eigenen App-Repos BASE_IMAGE per Digest pinnen:
+#   FROM ghcr.io/altner/images/java:21.0.13@sha256:<digest>
+ARG BASE_IMAGE=ghcr.io/altner/images/java:21.0.13
+
+# Build-Stage: JDK derselben Version aus Debian 13.7, aus demselben Snapshot wie das Image
+# (DEBIAN_SNAPSHOT in images/java/Containerfile). Bytecode hängt nicht von der Architektur
+# ab, deshalb wird nur einmal gebaut, auf der Build-Plattform.
+FROM --platform=$BUILDPLATFORM debian:13.7-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS build
+ARG SOURCE_DATE_EPOCH
+ARG DEBIAN_SNAPSHOT=20261027T195512Z
+RUN sed -i -e "s|^# \(http://snapshot.debian.org/archive/[a-z-]*/\).*$|URIs: \1$DEBIAN_SNAPSHOT|" \
+		-e '/^URIs: http:\/\/deb.debian.org/d' /etc/apt/sources.list.d/debian.sources \
+	&& apt-get -qq -o Acquire::Check-Valid-Until=false update \
+	&& apt-get -qq install -y --no-install-recommends \
+		openjdk-21-jdk-headless=21.0.13+9-1~deb13u2 >/dev/null
+WORKDIR /src
+COPY App.java ./
+# Ein JAR mit Main-Class, gestartet mit java -jar wie ein Fat-JAR; --date macht es reproduzierbar.
+RUN set -eu; \
+	javac --release 21 -Xlint:-options -d classes App.java; \
+	mkdir -p /app; \
+	date_opt=""; \
+	[ -z "${SOURCE_DATE_EPOCH:-}" ] || date_opt="--date=$(date -u -d "@$SOURCE_DATE_EPOCH" +%Y-%m-%dT%H:%M:%SZ)"; \
+	jar --create --file /app/app.jar --main-class App $date_opt -C classes .
+COPY index.html /app/
+RUN find /app -exec touch -h -d "@${SOURCE_DATE_EPOCH:-0}" {} +
+
+FROM ${BASE_IMAGE}
+COPY --from=build /app /app
+WORKDIR /app
+EXPOSE 8080
+# Der Healthcheck startet eine zweite, kleine JVM: C1 genügt, ohne hsperfdata in /tmp.
+HEALTHCHECK --interval=10s --timeout=10s --start-period=60s --start-interval=1s CMD ["/usr/bin/java", "-XX:TieredStopAtLevel=1", "-XX:-UsePerfData", "-Xmx32m", "-jar", "/app/app.jar", "healthcheck"]
+CMD ["/usr/bin/java", "-Xmx128m", "-jar", "/app/app.jar"]

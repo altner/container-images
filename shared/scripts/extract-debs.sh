@@ -11,6 +11,10 @@
 # Quelle ist der Debian-Snapshot, auf dem das Builder-Image selbst beruht. Das Image
 # nennt ihn als Kommentar in debian.sources; so bleiben gepinnte Versionen abrufbar
 # und der Snapshot ändert sich nur zusammen mit dem Digest des Builder-Images.
+#
+# Ausnahme: DEBIAN_SNAPSHOT=<YYYYMMDDTHHMMSSZ> nimmt einen späteren Snapshot, etwa wenn ein
+# Sicherheitsupdate schon in trixie-security liegt, aber noch in keinem Builder-Image.
+# Ist er nicht neuer als der des Builders, wird er ignoriert (und kann entfernt werden).
 set -eu
 
 dest=$1
@@ -24,6 +28,15 @@ if grep -q '^URIs: http://deb.debian.org' "$sources"; then
 	}
 	sed -i -e 's|^# \(http://snapshot.debian.org/.*\)$|URIs: \1|' \
 		-e '/^URIs: http:\/\/deb.debian.org/d' "$sources"
+	if [ -n "${DEBIAN_SNAPSHOT:-}" ]; then
+		builder=$(sed -n 's|^URIs: http://snapshot.debian.org/archive/debian/\([0-9TZ]*\)$|\1|p' "$sources")
+		if [ "$DEBIAN_SNAPSHOT" \> "$builder" ]; then
+			echo "extract-debs: Snapshot $DEBIAN_SNAPSHOT statt $builder (DEBIAN_SNAPSHOT)" >&2
+			sed -i "s|^\(URIs: http://snapshot.debian.org/archive/[a-z-]*/\)[0-9TZ]*$|\1$DEBIAN_SNAPSHOT|" "$sources"
+		else
+			echo "extract-debs: DEBIAN_SNAPSHOT=$DEBIAN_SNAPSHOT ist nicht neuer als der Builder ($builder), ignoriert; kann entfernt werden" >&2
+		fi
+	fi
 fi
 apt-get -qq -o Acquire::Check-Valid-Until=false update
 

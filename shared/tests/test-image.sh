@@ -34,9 +34,11 @@ check_content() {
 	docker rm "$cid" >/dev/null
 	[ "$got" = "$want" ] && ok "Debian $got laut os-release" || fail "Debian $got laut os-release, image.yaml sagt $want"
 
-	# Fehlende Bibliotheken: der Loader des Images löst jede dynamische Datei auf.
-	local loader path interp use out missing=0 count=0
+	# Fehlende Bibliotheken: der Loader des Images löst jede dynamische Datei auf, bei
+	# "library_path:" in image.yaml zusätzlich mit diesem Suchpfad.
+	local loader path interp use out missing=0 count=0 libpath
 	loader=$(awk '$2 != "" {print $2; exit}' "$base.dynamic")
+	libpath=$(meta "$name" library_path)
 	while read -r path interp; do
 		[ -n "$path" ] || continue
 		count=$((count + 1))
@@ -48,7 +50,7 @@ check_content() {
 		fi
 		# Der Loader selbst ist statisch; "--list" auf ihn sagt nichts aus.
 		[ "$(basename "$path")" != "$(basename "$use")" ] || continue
-		if ! out=$(docker run --rm --platform "$platform" --network none --entrypoint "$use" "$ref" --list "$path" 2>&1) ||
+		if ! out=$(docker run --rm --platform "$platform" --network none --entrypoint "$use" "$ref" ${libpath:+--library-path "$libpath"} --list "$path" 2>&1) ||
 			grep -q 'not found' <<<"$out"; then
 			fail "$path: $(tr -s ' \t\n' ' ' <<<"$out")"
 			missing=1

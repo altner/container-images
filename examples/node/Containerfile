@@ -6,7 +6,7 @@ ARG BASE_IMAGE=ghcr.io/altner/images/node:24.22.1
 
 # Build-Stage: gleiche Node- und Debian-Version (13.7) wie die Runtime, auf der
 # Zielplattform, damit native Addons zur glibc und Architektur passen.
-FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS build
+FROM node:24.22.1-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS build
 ARG SOURCE_DATE_EPOCH
 WORKDIR /app
 COPY package.json package-lock.json ./
